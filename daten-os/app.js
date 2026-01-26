@@ -1,452 +1,456 @@
-/* app.js v9.1 init fix + existing index.html UI */
-(() => {
-  "use strict";
+"use strict";
 
-  const VERSION = "v9.1";
-  const BASE_PATH = "/colorfinder/daten-os/";
+/*
+ColorFinder
+komplette datei ersetzen
+*/
 
-  const CORE_ASSETS = [
-    `${BASE_PATH}`,
-    `${BASE_PATH}index.html`,
-    `${BASE_PATH}style.css`,
-    `${BASE_PATH}app.js`,
-    `${BASE_PATH}sw.js`,
-    `${BASE_PATH}manifest.webmanifest`,
-    `${BASE_PATH}icons/icon-192.png`,
-    `${BASE_PATH}icons/icon-512.png`
-  ];
+const video = document.getElementById("video");
+const videoShell = document.getElementById("videoShell");
+const tapRing = document.getElementById("tapRing");
 
-  const LS_OFFLINE_READY_KEY = `offlineReady_${VERSION}`;
-  const LS_WB_KEY = "colorfinder_wb_v1";
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-  const $ = (id) => document.getElementById(id);
+const btnStart = document.getElementById("btnStart");
+const btnLight = document.getElementById("btnLight");
+const btnWB = document.getElementById("btnWB");
 
-  const els = {
-    videoShell: null,
-    video: null,
-    canvas: null,
-    tapHint: null,
-    tapRing: null,
+const statusText = document.getElementById("statusText");
 
-    btnStart: null,
-    btnLight: null,
-    btnWB: null,
+const swatch = document.getElementById("swatch");
+const colorNameEl = document.getElementById("colorName");
+const colorDescEl = document.getElementById("colorDesc");
 
-    statusText: null,
+const outHex = document.getElementById("outHex");
+const outRgb = document.getElementById("outRgb");
+const outHsl = document.getElementById("outHsl");
+const outCss = document.getElementById("outCss");
 
-    swatch: null,
-    colorName: null,
-    colorDesc: null,
+const toast = document.getElementById("toast");
 
-    outHex: null,
-    outRgb: null,
-    outHsl: null,
-    outCss: null,
+let stream = null;
+let videoTrack = null;
 
-    toast: null
+let lightSupported = false;
+let lightOn = false;
+
+let wbMode = "idle"; // idle | calibrate
+
+const CAL_KEY = "colorfinder_whitebalance_v3";
+let calibration = loadCalibration();
+
+setStatus("bereit");
+updateButtons();
+
+btnStart.addEventListener("click", async () => {
+  if (stream) {
+    stopCamera();
+    setStatus("kamera aus");
+    toastMsg("kamera aus");
+    return;
+  }
+  await startCamera();
+});
+
+btnLight.addEventListener("click", async () => {
+  await toggleLight();
+});
+
+btnWB.addEventListener("click", () => {
+  if (!stream) {
+    setStatus("starte kamera zuerst");
+    return;
+  }
+
+  if (wbMode === "calibrate") {
+    wbMode = "idle";
+    setStatus("kalibrieren abgebrochen");
+    updateButtons();
+    return;
+  }
+
+  if (calibration && calibration.enabled) {
+    calibration.enabled = false;
+    saveCalibration(calibration);
+    setStatus("weissabgleich aus");
+    toastMsg("weissabgleich aus");
+    updateButtons();
+    return;
+  }
+
+  wbMode = "calibrate";
+  setStatus("kalibrieren tippe auf weiss oder grau");
+  toastMsg("kalibrieren bereit");
+  updateButtons();
+});
+
+videoShell.addEventListener("contextmenu", (e) => { e.preventDefault(); });
+
+videoShell.addEventListener("pointerdown", (e) => {
+  if (!stream) return;
+  e.preventDefault();
+  handleTap(e.clientX, e.clientY);
+});
+
+document.addEventListener("click", (e) => {
+  const t = e.target;
+  if (!t) return;
+  const key = t.getAttribute("data-copy");
+  if (!key) return;
+  const el = document.getElementById(key);
+  if (!el) return;
+  copyText(el.textContent || "");
+});
+
+async function startCamera() {
+  try {
+    setStatus("kamera start");
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+
+    video.srcObject = stream;
+    await video.play();
+
+    videoTrack = stream.getVideoTracks()[0];
+
+    await detectLightSupport();
+    setStatus("kamera bereit");
+    toastMsg("bereit");
+    updateButtons();
+  } catch (err) {
+    console.error(err);
+    setStatus("kamera fehler erlaubnis pruefen");
+    toastMsg("kamera fehler");
+    stopCamera();
+  }
+}
+
+function stopCamera() {
+  try {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+  } catch (_) {}
+
+  stream = null;
+  videoTrack = null;
+
+  lightSupported = false;
+  lightOn = false;
+
+  wbMode = "idle";
+
+  updateButtons();
+}
+
+async function detectLightSupport() {
+  lightSupported = false;
+  if (!videoTrack) return;
+
+  const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : null;
+  lightSupported = !!(caps && typeof caps.torch !== "undefined");
+}
+
+async function toggleLight() {
+  if (!videoTrack) {
+    setStatus("starte kamera zuerst");
+    return;
+  }
+  if (!lightSupported) {
+    setStatus("licht nicht verfuegbar");
+    return;
+  }
+
+  try {
+    lightOn = !lightOn;
+    await videoTrack.applyConstraints({ advanced: [{ torch: lightOn }] });
+    setStatus(lightOn ? "licht an" : "licht aus");
+    updateButtons();
+  } catch (err) {
+    console.error(err);
+    lightOn = false;
+    setStatus("licht fehler");
+    updateButtons();
+  }
+}
+
+function updateButtons() {
+  const running = !!stream;
+
+  btnStart.textContent = running ? "kamera aus" : "kamera starten";
+
+  btnLight.disabled = !running || !lightSupported;
+  btnWB.disabled = !running;
+
+  btnLight.textContent = lightOn ? "licht an" : "licht aus";
+
+  if (wbMode === "calibrate") {
+    btnWB.textContent = "tippe auf weiss";
+    return;
+  }
+
+  const wbOn = calibration && calibration.enabled;
+  btnWB.textContent = wbOn ? "weissabgleich an" : "kalibrieren";
+}
+
+function handleTap(clientX, clientY) {
+  const rect = video.getBoundingClientRect();
+  showRing(clientX, clientY, rect);
+
+  if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
+  const x = Math.round((clientX - rect.left) * (video.videoWidth / rect.width));
+  const y = Math.round((clientY - rect.top) * (video.videoHeight / rect.height));
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const sample = sampleAverageRgb(x, y, 10);
+  if (!sample) return;
+
+  if (wbMode === "calibrate") {
+    applyCalibrationFromSample(sample);
+    wbMode = "idle";
+    updateButtons();
+    setStatus("weissabgleich an");
+    toastMsg("kalibriert");
+
+    const msg = "weissabgleich an";
+    setTimeout(() => {
+      if (statusText.textContent === msg) setStatus("bereit");
+    }, 5000);
+
+    return;
+  }
+
+  const rgbRaw = sample;
+  const rgb = applyCalibrationToRgb(rgbRaw);
+
+  renderResult(rgb, rgbRaw);
+}
+
+function showRing(clientX, clientY, rect) {
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+
+  tapRing.style.left = `${x}px`;
+  tapRing.style.top = `${y}px`;
+
+  tapRing.classList.remove("show");
+  void tapRing.offsetWidth;
+  tapRing.classList.add("show");
+}
+
+function sampleAverageRgb(cx, cy, radius) {
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const x0 = clampInt(cx - radius, 0, w - 1);
+  const y0 = clampInt(cy - radius, 0, h - 1);
+  const x1 = clampInt(cx + radius, 0, w - 1);
+  const y1 = clampInt(cy + radius, 0, h - 1);
+
+  const sw = x1 - x0 + 1;
+  const sh = y1 - y0 + 1;
+
+  try {
+    const img = ctx.getImageData(x0, y0, sw, sh);
+    const d = img.data;
+
+    let r = 0, g = 0, b = 0;
+    const n = sw * sh;
+
+    for (let i = 0; i < d.length; i += 4) {
+      r += d[i];
+      g += d[i + 1];
+      b += d[i + 2];
+    }
+
+    return {
+      r: Math.round(r / n),
+      g: Math.round(g / n),
+      b: Math.round(b / n)
+    };
+  } catch (err) {
+    console.error(err);
+    setStatus("pixel lesen blockiert");
+    return null;
+  }
+}
+
+function applyCalibrationFromSample(sample) {
+  const target = 235;
+
+  const refR = Math.max(1, sample.r);
+  const refG = Math.max(1, sample.g);
+  const refB = Math.max(1, sample.b);
+
+  const gainR = clampNum(target / refR, 0.5, 3.0);
+  const gainG = clampNum(target / refG, 0.5, 3.0);
+  const gainB = clampNum(target / refB, 0.5, 3.0);
+
+  calibration = {
+    enabled: true,
+    gainR,
+    gainG,
+    gainB,
+    refR,
+    refG,
+    refB
   };
 
-  function bindEls() {
-    els.videoShell = $("videoShell");
-    els.video = $("video");
-    els.canvas = $("canvas");
-    els.tapHint = $("tapHint");
-    els.tapRing = $("tapRing");
+  saveCalibration(calibration);
+}
 
-    els.btnStart = $("btnStart");
-    els.btnLight = $("btnLight");
-    els.btnWB = $("btnWB");
+function applyCalibrationToRgb(rgb) {
+  if (!calibration || !calibration.enabled) return rgb;
 
-    els.statusText = $("statusText");
+  const r = clampInt(Math.round(rgb.r * calibration.gainR), 0, 255);
+  const g = clampInt(Math.round(rgb.g * calibration.gainG), 0, 255);
+  const b = clampInt(Math.round(rgb.b * calibration.gainB), 0, 255);
 
-    els.swatch = $("swatch");
-    els.colorName = $("colorName");
-    els.colorDesc = $("colorDesc");
+  return { r, g, b };
+}
 
-    els.outHex = $("outHex");
-    els.outRgb = $("outRgb");
-    els.outHsl = $("outHsl");
-    els.outCss = $("outCss");
+function renderResult(rgb, rgbRaw) {
+  const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+  const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
 
-    els.toast = $("toast");
-  }
+  const name = getColorName(rgb.r, rgb.g, rgb.b);
+  const wbOn = calibration && calibration.enabled;
 
-  function assertElements() {
-    const required = [
-      "videoShell","video","canvas","tapRing",
-      "btnStart","btnLight","btnWB",
-      "statusText",
-      "swatch","colorName","colorDesc",
-      "outHex","outRgb","outHsl","outCss"
-    ];
-    const missing = required.filter((k) => !els[k]);
-    if (missing.length) {
-      alert("Fehlende Elemente in index.html: " + missing.join(", "));
-      throw new Error("Missing UI elements");
+  swatch.style.background = hex;
+  colorNameEl.textContent = name;
+  colorDescEl.textContent = wbOn
+    ? `korrigiert aus ${rgbRaw.r}, ${rgbRaw.g}, ${rgbRaw.b}`
+    : `raw ${rgbRaw.r}, ${rgbRaw.g}, ${rgbRaw.b}`;
+
+  outHex.textContent = hex;
+  outRgb.textContent = `${rgb.r}, ${rgb.g}, ${rgb.b}`;
+  outHsl.textContent = `${hsl.h} ${hsl.s}% ${hsl.l}%`;
+  outCss.textContent = `color: ${hex}; background: ${hex};`;
+
+  toastMsg("gemessen");
+}
+
+function rgbToHex(r, g, b) {
+  return "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+function rgbToHsl(r, g, b) {
+  let rr = r / 255, gg = g / 255, bb = b / 255;
+
+  const max = Math.max(rr, gg, bb);
+  const min = Math.min(rr, gg, bb);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+
+  const d = max - min;
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    switch (max) {
+      case rr: h = ((gg - bb) / d) % 6; break;
+      case gg: h = (bb - rr) / d + 2; break;
+      case bb: h = (rr - gg) / d + 4; break;
     }
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
   }
 
-  function clamp255(n) {
-    if (n < 0) return 0;
-    if (n > 255) return 255;
-    return n;
-  }
+  return {
+    h,
+    s: Math.round(s * 100),
+    l: Math.round(l * 100)
+  };
+}
 
-  function rgbToHex(r, g, b) {
-    const to2 = (v) => v.toString(16).padStart(2, "0").toUpperCase();
-    return `#${to2(r)}${to2(g)}${to2(b)}`;
-  }
+function clampInt(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
 
-  function rgbToHsl(r, g, b) {
-    let rr = r / 255, gg = g / 255, bb = b / 255;
-    const max = Math.max(rr, gg, bb);
-    const min = Math.min(rr, gg, bb);
-    let h = 0, s = 0;
-    const l = (max + min) / 2;
+function clampNum(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
 
-    if (max !== min) {
-      const d = max - min;
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      switch (max) {
-        case rr: h = (gg - bb) / d + (gg < bb ? 6 : 0); break;
-        case gg: h = (bb - rr) / d + 2; break;
-        case bb: h = (rr - gg) / d + 4; break;
-      }
-      h = h / 6;
+function copyText(text) {
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    toastMsg("kopiert");
+  }).catch(() => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      toastMsg("kopiert");
+    } catch (_) {
+      toastMsg("copy fehler");
     }
+  });
+}
 
-    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+function toastMsg(msg) {
+  toast.textContent = msg;
+  setTimeout(() => {
+    if (toast.textContent === msg) toast.textContent = "";
+  }, 900);
+}
+
+function setStatus(msg) {
+  statusText.textContent = msg;
+}
+
+function saveCalibration(obj) {
+  try {
+    localStorage.setItem(CAL_KEY, JSON.stringify(obj));
+  } catch (_) {}
+}
+
+function loadCalibration() {
+  try {
+    const raw = localStorage.getItem(CAL_KEY);
+    if (!raw) return { enabled: false };
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object") return { enabled: false };
+    if (typeof obj.enabled !== "boolean") obj.enabled = false;
+    return obj;
+  } catch (_) {
+    return { enabled: false };
   }
+}
 
-  function toast(msg) {
-    if (!els.toast) return;
-    els.toast.textContent = msg || "";
-    if (!msg) return;
-    clearTimeout(toast._t);
-    toast._t = setTimeout(() => { els.toast.textContent = ""; }, 1200);
-  }
+function getColorName(r, g, b) {
+  const hsl = rgbToHsl(r, g, b);
+  const h = hsl.h;
+  const s = hsl.s;
+  const l = hsl.l;
 
-  async function copyText(text) {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-        toast("kopiert");
-        return;
-      }
-    } catch {}
-    try {
-      prompt("copy", text);
-    } catch {}
-  }
+  if (l <= 8) return "schwarz";
+  if (l >= 92 && s <= 12) return "weiss";
+  if (s <= 10 && l > 8 && l < 92) return "grau";
 
-  function wireCopyButtons() {
-    const btns = document.querySelectorAll("[data-copy]");
-    btns.forEach((b) => {
-      b.addEventListener("click", () => {
-        const id = b.getAttribute("data-copy");
-        const el = document.getElementById(id);
-        if (!el) return;
-        copyText(el.textContent.trim());
-      });
-    });
-  }
+  if (h >= 0 && h < 15) return l < 50 ? "dunkelrot" : "rot";
+  if (h >= 15 && h < 35) return "orange";
+  if (h >= 35 && h < 60) return "gelb";
+  if (h >= 60 && h < 95) return "gelbgruen";
+  if (h >= 95 && h < 150) return "gruen";
+  if (h >= 150 && h < 190) return "tuerkis";
+  if (h >= 190 && h < 230) return "cyanblau";
+  if (h >= 230 && h < 265) return "blau";
+  if (h >= 265 && h < 295) return "violett";
+  if (h >= 295 && h < 330) return "magenta";
+  if (h >= 330 && h <= 360) return "rot";
 
-  let stream = null;
-  let videoTrack = null;
-  let hasTorch = false;
-  let torchOn = false;
-
-  let calibrateArmed = false;
-  let wb = { has: false, enabled: false, gainR: 1, gainG: 1, gainB: 1 };
-
-  function loadWb() {
-    try {
-      const raw = localStorage.getItem(LS_WB_KEY);
-      if (!raw) return;
-      const obj = JSON.parse(raw);
-      if (!obj) return;
-      if (typeof obj.gainR === "number" && typeof obj.gainG === "number" && typeof obj.gainB === "number") {
-        wb.has = true;
-        wb.enabled = !!obj.enabled;
-        wb.gainR = obj.gainR;
-        wb.gainG = obj.gainG;
-        wb.gainB = obj.gainB;
-      }
-    } catch {}
-  }
-
-  function saveWb() {
-    try {
-      localStorage.setItem(LS_WB_KEY, JSON.stringify({
-        enabled: wb.enabled,
-        gainR: wb.gainR,
-        gainG: wb.gainG,
-        gainB: wb.gainB
-      }));
-    } catch {}
-  }
-
-  function applyWb(r, g, b) {
-    if (!wb.has || !wb.enabled) return { r, g, b };
-    return {
-      r: clamp255(Math.round(r * wb.gainR)),
-      g: clamp255(Math.round(g * wb.gainG)),
-      b: clamp255(Math.round(b * wb.gainB))
-    };
-  }
-
-  function computeWbFromWhiteSample(r, g, b) {
-    const avg = (r + g + b) / 3;
-    const gainR = avg / (r || 1);
-    const gainG = avg / (g || 1);
-    const gainB = avg / (b || 1);
-    const norm = Math.max(gainR, gainG, gainB);
-
-    wb.gainR = gainR / norm;
-    wb.gainG = gainG / norm;
-    wb.gainB = gainB / norm;
-    wb.has = true;
-    wb.enabled = true;
-    saveWb();
-  }
-
-  function setStatus(text) {
-    els.statusText.textContent = text;
-  }
-
-  function updateWBButton() {
-    els.btnWB.disabled = false;
-    if (!wb.has) {
-      els.btnWB.textContent = calibrateArmed ? "weiss tippen" : "kalibrieren";
-      return;
-    }
-    els.btnWB.textContent = wb.enabled ? "wb aus" : "wb an";
-  }
-
-  function updateTorchButton() {
-    if (!hasTorch) {
-      els.btnLight.disabled = true;
-      els.btnLight.textContent = "licht";
-      return;
-    }
-    els.btnLight.disabled = false;
-    els.btnLight.textContent = torchOn ? "licht aus" : "licht an";
-  }
-
-  function stopCamera() {
-    try {
-      if (els.video) els.video.srcObject = null;
-      if (stream) stream.getTracks().forEach((t) => t.stop());
-    } catch {}
-
-    stream = null;
-    videoTrack = null;
-    hasTorch = false;
-    torchOn = false;
-
-    els.btnStart.textContent = "kamera starten";
-    updateTorchButton();
-    setStatus("bereit");
-  }
-
-  async function startCamera() {
-    if (stream) return;
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("Dieser Browser unterstuetzt keine Kamera API.");
-      return;
-    }
-
-    try {
-      setStatus("kamera startet");
-      const constraints = {
-        audio: false,
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } }
-      };
-
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-      els.video.srcObject = stream;
-
-      const tracks = stream.getVideoTracks();
-      videoTrack = tracks && tracks[0] ? tracks[0] : null;
-
-      hasTorch = false;
-      torchOn = false;
-
-      if (videoTrack && videoTrack.getCapabilities) {
-        const caps = videoTrack.getCapabilities();
-        if (caps && typeof caps.torch !== "undefined") hasTorch = !!caps.torch;
-      }
-
-      els.btnStart.textContent = "kamera stoppen";
-      updateTorchButton();
-      setStatus("bereit");
-
-    } catch (e) {
-      stopCamera();
-      alert("Kamera Zugriff nicht moeglich. Safari Rechte pruefen.");
-    }
-  }
-
-  async function toggleTorch() {
-    if (!hasTorch || !videoTrack) return;
-    try {
-      torchOn = !torchOn;
-      await videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] });
-    } catch {
-      torchOn = false;
-    }
-    updateTorchButton();
-  }
-
-  function showRing(clientX, clientY) {
-    const rect = els.videoShell.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    els.tapRing.style.left = `${x}px`;
-    els.tapRing.style.top = `${y}px`;
-    els.tapRing.style.opacity = "1";
-    els.tapRing.style.transform = "translate(-50%,-50%) scale(1)";
-
-    clearTimeout(showRing._t);
-    showRing._t = setTimeout(() => {
-      els.tapRing.style.opacity = "0";
-    }, 220);
-  }
-
-  function sampleAt(clientX, clientY) {
-    const v = els.video;
-    if (!v.videoWidth || !v.videoHeight) return null;
-
-    const rect = els.videoShell.getBoundingClientRect();
-    const xNorm = (clientX - rect.left) / rect.width;
-    const yNorm = (clientY - rect.top) / rect.height;
-
-    const x = Math.floor(xNorm * v.videoWidth);
-    const y = Math.floor(yNorm * v.videoHeight);
-
-    if (x < 0 || y < 0 || x >= v.videoWidth || y >= v.videoHeight) return null;
-
-    const c = els.canvas;
-    const ctx = c.getContext("2d", { willReadFrequently: true });
-
-    c.width = v.videoWidth;
-    c.height = v.videoHeight;
-    ctx.drawImage(v, 0, 0, c.width, c.height);
-
-    const d = ctx.getImageData(x, y, 1, 1).data;
-    return { r: d[0], g: d[1], b: d[2] };
-  }
-
-  function renderColor(r, g, b) {
-    const hex = rgbToHex(r, g, b);
-    const hsl = rgbToHsl(r, g, b);
-
-    els.outHex.textContent = hex;
-    els.outRgb.textContent = `${r}, ${g}, ${b}`;
-    els.outHsl.textContent = `${hsl.h}, ${hsl.s}%, ${hsl.l}%`;
-    els.outCss.textContent = `color: ${hex}; background: ${hex};`;
-
-    els.swatch.style.background = hex;
-    els.colorName.textContent = hex;
-    els.colorDesc.textContent = calibrateArmed ? "weiss tippen zum kalibrieren" : "tippe ins videobild";
-  }
-
-  async function registerSW() {
-    if (!("serviceWorker" in navigator)) return;
-    try {
-      await navigator.serviceWorker.register(`${BASE_PATH}sw.js`, { scope: BASE_PATH });
-    } catch {}
-  }
-
-  async function offlineWarmup() {
-    try {
-      if (localStorage.getItem(LS_OFFLINE_READY_KEY) === "1") return;
-      if (!navigator.onLine) return;
-
-      if ("serviceWorker" in navigator) {
-        try { await navigator.serviceWorker.ready; } catch {}
-      }
-
-      await Promise.all(CORE_ASSETS.map((u) => fetch(u, { cache: "reload" }).catch(() => null)));
-      localStorage.setItem(LS_OFFLINE_READY_KEY, "1");
-    } catch {}
-  }
-
-  function wireEvents() {
-    els.btnStart.addEventListener("click", () => {
-      if (stream) stopCamera();
-      else startCamera();
-    });
-
-    els.btnLight.addEventListener("click", () => {
-      toggleTorch();
-    });
-
-    els.btnWB.addEventListener("click", () => {
-      if (!wb.has) {
-        calibrateArmed = !calibrateArmed;
-        updateWBButton();
-        setStatus(calibrateArmed ? "weiss auswaehlen" : "bereit");
-        els.colorDesc.textContent = calibrateArmed ? "weiss tippen zum kalibrieren" : "tippe ins videobild";
-        return;
-      }
-      wb.enabled = !wb.enabled;
-      saveWb();
-      calibrateArmed = false;
-      updateWBButton();
-      setStatus("bereit");
-    });
-
-    els.videoShell.addEventListener("pointerdown", (ev) => {
-      if (!stream) return;
-      showRing(ev.clientX, ev.clientY);
-
-      const raw = sampleAt(ev.clientX, ev.clientY);
-      if (!raw) return;
-
-      if (calibrateArmed) {
-        computeWbFromWhiteSample(raw.r, raw.g, raw.b);
-        calibrateArmed = false;
-        updateWBButton();
-        setStatus("wb gesetzt");
-      }
-
-      const c = applyWb(raw.r, raw.g, raw.b);
-      renderColor(c.r, c.g, c.b);
-    });
-
-    window.addEventListener("beforeunload", () => {
-      try { stopCamera(); } catch {}
-    });
-  }
-
-  function initDefaults() {
-    els.btnLight.disabled = true;
-    updateTorchButton();
-    updateWBButton();
-    renderColor(0, 0, 0);
-    setStatus("bereit");
-    wireCopyButtons();
-  }
-
-  function init() {
-    bindEls();
-    assertElements();
-    loadWb();
-    initDefaults();
-    wireEvents();
-    registerSW().then(() => offlineWarmup());
-  }
-
-  function boot() {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", init, { once: true });
-    } else {
-      init();
-    }
-  }
-
-  boot();
-})();
+  return "farbe";
+}
