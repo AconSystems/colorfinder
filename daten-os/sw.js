@@ -1,25 +1,29 @@
-/* sw.js v9 */
-const VERSION = "v9";
-const BASE_PATH = "/colorfinder/daten-os/";
-const CACHE_NAME = `colorfinder-${VERSION}`;
+"use strict";
 
-const CORE_ASSETS = [
-  `${BASE_PATH}`,
-  `${BASE_PATH}index.html`,
-  `${BASE_PATH}style.css`,
-  `${BASE_PATH}app.js`,
-  `${BASE_PATH}manifest.webmanifest`,
-  `${BASE_PATH}icons/icon-192.png`,
-  `${BASE_PATH}icons/icon-512.png`
+/*
+ColorFinder sw.js
+komplette datei ersetzen
+bei jedem release VERSION erhoehen
+*/
+
+const VERSION = "v10";
+const CACHE_NAME = "colorfinder-cache-" + VERSION;
+
+const PRECACHE_URLS = [
+  "./",
+  "./index.html",
+  "./style.css",
+  "./app.js",
+  "./manifest.json",
+  "./sw.js",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.addAll(CORE_ASSETS);
-      await self.skipWaiting();
-    })()
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
   );
 });
 
@@ -28,15 +32,19 @@ self.addEventListener("activate", (event) => {
     (async () => {
       const keys = await caches.keys();
       await Promise.all(
-        keys.map((key) => {
-          if (key.startsWith("colorfinder-") && key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
+        keys
+          .filter((k) => k.startsWith("colorfinder-cache-") && k !== CACHE_NAME)
+          .map((k) => caches.delete(k))
       );
       await self.clients.claim();
     })()
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event && event.data === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
@@ -44,41 +52,35 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  const sameOrigin = url.origin === self.location.origin;
+  if (url.origin !== self.location.origin) return;
 
-  // ⭐ ENTSCHEIDEND FÜR FLUGMODUS START
-  if (req.mode === "navigate") {
-    event.respondWith(
-      (async () => {
-        const cache = await caches.open(CACHE_NAME);
-        const cached = await cache.match(`${BASE_PATH}index.html`, { ignoreSearch: true });
-        if (cached) return cached;
-
-        try {
-          return await fetch(req);
-        } catch {
-          return new Response("Offline", { status: 503 });
-        }
-      })()
-    );
-    return;
-  }
-
-  if (!sameOrigin) return;
-
-  event.respondWith(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(req, { ignoreSearch: true });
-      if (cached) return cached;
-
-      try {
-        const res = await fetch(req);
-        if (res && res.ok) cache.put(req, res.clone());
-        return res;
-      } catch {
-        return new Response("", { status: 503 });
-      }
-    })()
-  );
+  event.respondWith(staleWhileRevalidate(req));
 });
+
+async function staleWhileRevalidate(req) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(req);
+
+  const networkPromise = fetch(req)
+    .then((res) => {
+      if (res && res.ok && res.type === "basic") {
+        cache.put(req, res.clone());
+      }
+      return res;
+    })
+    .catch(() => null);
+
+  return cached || (await networkPromise) || cachedFallback(req);
+}
+
+async function cachedFallback(req) {
+  if (req.mode === "navigate") {
+    const cache = await caches.open(CACHE_NAME);
+    const cachedIndex = await cache.match("./index.html");
+    if (cachedIndex) return cachedIndex;
+  }
+  return new Response("offline", {
+    status: 503,
+    headers: { "Content-Type": "text/plain" }
+  });
+}
