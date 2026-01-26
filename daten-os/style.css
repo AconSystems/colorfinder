@@ -15,7 +15,6 @@ body{
   font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
   background:var(--bg);
   color:var(--text);
-
   -webkit-user-select:none;
   user-select:none;
   -webkit-touch-callout:none;
@@ -56,7 +55,7 @@ body{
 
 @media (min-width: 900px){
   .stage{
-    grid-template-columns: 1.2fr 0.8fr;
+    grid-template-columns: 1.15fr 0.85fr;
     align-items:start;
   }
 }
@@ -67,18 +66,33 @@ body{
   overflow:hidden;
   background:#000;
   border:1px solid var(--line);
-  min-height:320px;
   touch-action:manipulation;
+  max-height:60vh;
 }
 
 video{
   width:100%;
-  height:auto;
+  height:100%;
   display:block;
   background:#000;
+  object-fit:cover;
+  max-height:60vh;
 }
 
 canvas{display:none}
+
+.tapHint{
+  position:absolute;
+  left:12px;
+  bottom:12px;
+  padding:8px 10px;
+  background:rgba(0,0,0,0.55);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:999px;
+  font-size:12px;
+  color:var(--text);
+  pointer-events:none;
+}
 
 .tapRing{
   position:absolute;
@@ -110,14 +124,20 @@ canvas{display:none}
   padding:12px;
 }
 
-.row{
+.panelTop{
   display:flex;
-  gap:10px;
   align-items:center;
+  justify-content:space-between;
+  gap:10px;
   margin-bottom:10px;
 }
 
-.buttons{flex-wrap:wrap}
+.panelRight{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex:0 0 auto;
+}
 
 .btn{
   border:1px solid var(--line);
@@ -130,6 +150,11 @@ canvas{display:none}
   user-select:none;
   -webkit-user-select:none;
   touch-action:manipulation;
+  white-space:nowrap;
+}
+
+.btn.subtle{
+  background:#121216;
 }
 
 .btn:disabled{
