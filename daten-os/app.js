@@ -38,7 +38,7 @@ let lightOn = false;
 
 let wbMode = "idle"; // idle | calibrate
 
-const CAL_KEY = "colorfinder_whitebalance_v2";
+const CAL_KEY = "colorfinder_whitebalance_v3";
 let calibration = loadCalibration(); 
 // { enabled: boolean, gainR, gainG, gainB, refR, refG, refB }
 
@@ -61,7 +61,7 @@ btnWB.addEventListener("click", () => {
 
   if (wbMode === "calibrate") {
     wbMode = "idle";
-    setStatus("weissabgleich abgebrochen");
+    setStatus("kalibrieren abgebrochen");
     updateButtons();
     return;
   }
@@ -76,17 +76,13 @@ btnWB.addEventListener("click", () => {
   }
 
   wbMode = "calibrate";
-  setStatus("weissabgleich tippe auf weiss oder neutral grau");
-  toastMsg("kalibrierung bereit");
+  setStatus("kalibrieren tippe auf weiss oder grau");
+  toastMsg("kalibrieren bereit");
   updateButtons();
 });
 
-// verhindert ios text selection menue beim langen druecken
-videoShell.addEventListener("touchstart", (e) => { e.preventDefault(); }, { passive:false });
-videoShell.addEventListener("touchend", (e) => { e.preventDefault(); }, { passive:false });
 videoShell.addEventListener("contextmenu", (e) => { e.preventDefault(); });
 
-// tap messen
 videoShell.addEventListener("pointerdown", (e) => {
   if (!stream) return;
   e.preventDefault();
@@ -195,7 +191,7 @@ function updateButtons() {
   }
 
   const wbOn = calibration && calibration.enabled;
-  btnWB.textContent = wbOn ? "weissabgleich an" : "weissabgleich";
+  btnWB.textContent = wbOn ? "weissabgleich an" : "kalibrieren";
 }
 
 function handleTap(clientX, clientY) {
@@ -222,7 +218,6 @@ function handleTap(clientX, clientY) {
     setStatus("weissabgleich an");
     toastMsg("kalibriert");
 
-    // status nach 5 sekunden wieder ruhig
     const msg = "weissabgleich an";
     setTimeout(() => {
       if (statusText.textContent === msg) setStatus("bereit");
@@ -287,14 +282,12 @@ function sampleAverageRgb(cx, cy, radius) {
 }
 
 function applyCalibrationFromSample(sample) {
-  // ziel nicht 255 sondern etwas sanfter damit es weniger ueberzieht
   const target = 235;
 
   const refR = Math.max(1, sample.r);
   const refG = Math.max(1, sample.g);
   const refB = Math.max(1, sample.b);
 
-  // gain begrenzen damit es nicht extrem wird
   const gainR = clampNum(target / refR, 0.5, 3.0);
   const gainG = clampNum(target / refG, 0.5, 3.0);
   const gainB = clampNum(target / refB, 0.5, 3.0);
@@ -432,10 +425,6 @@ function loadCalibration() {
     return { enabled: false };
   }
 }
-
-/*
-farbnamen logik simple robust
-*/
 
 function getColorName(r, g, b) {
   const hsl = rgbToHsl(r, g, b);
