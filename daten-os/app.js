@@ -1,456 +1,293 @@
-"use strict";
+/* app.js v9 */
+(() => {
+  "use strict";
 
-/*
-ColorFinder
-komplette datei ersetzen
-*/
+  const VERSION = "v9";
+  const BASE_PATH = "/colorfinder/daten-os/";
 
-const video = document.getElementById("video");
-const videoShell = document.getElementById("videoShell");
-const tapRing = document.getElementById("tapRing");
+  const CORE_ASSETS = [
+    `${BASE_PATH}`,
+    `${BASE_PATH}index.html`,
+    `${BASE_PATH}style.css`,
+    `${BASE_PATH}app.js`,
+    `${BASE_PATH}sw.js`,
+    `${BASE_PATH}manifest.webmanifest`,
+    `${BASE_PATH}icons/icon-192.png`,
+    `${BASE_PATH}icons/icon-512.png`
+  ];
 
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const LS_OFFLINE_READY_KEY = `offlineReady_${VERSION}`;
+  const LS_WB_KEY = "colorfinder_wb_v1";
 
-const btnStart = document.getElementById("btnStart");
-const btnLight = document.getElementById("btnLight");
-const btnWB = document.getElementById("btnWB");
+  let stream = null;
+  let videoTrack = null;
+  let hasTorch = false;
+  let torchOn = false;
 
-const statusText = document.getElementById("statusText");
+  let calibrateArmed = false;
+  let wb = {
+    has: false,
+    enabled: false,
+    gainR: 1,
+    gainG: 1,
+    gainB: 1
+  };
 
-const swatch = document.getElementById("swatch");
-const colorNameEl = document.getElementById("colorName");
-const colorDescEl = document.getElementById("colorDesc");
-
-const outHex = document.getElementById("outHex");
-const outRgb = document.getElementById("outRgb");
-const outHsl = document.getElementById("outHsl");
-const outCss = document.getElementById("outCss");
-
-const toast = document.getElementById("toast");
-
-let stream = null;
-let videoTrack = null;
-
-let lightSupported = false;
-let lightOn = false;
-
-let wbMode = "idle"; // idle | calibrate
-
-const CAL_KEY = "colorfinder_whitebalance_v3";
-let calibration = loadCalibration();
-
-setStatus("bereit");
-updateButtons();
-
-btnStart.addEventListener("click", async () => {
-  if (stream) {
-    stopCamera();
-    setStatus("kamera aus");
-    toastMsg("kamera aus");
-    return;
-  }
-  await startCamera();
-});
-
-btnLight.addEventListener("click", async () => {
-  await toggleLight();
-});
-
-btnWB.addEventListener("click", () => {
-  if (!stream) {
-    setStatus("starte kamera zuerst");
-    return;
+  function $(id) {
+    return document.getElementById(id);
   }
 
-  if (wbMode === "calibrate") {
-    wbMode = "idle";
-    setStatus("kalibrieren abgebrochen");
-    updateButtons();
-    return;
+  function clamp255(n) {
+    if (n < 0) return 0;
+    if (n > 255) return 255;
+    return n;
   }
 
-  if (calibration && calibration.enabled) {
-    calibration.enabled = false;
-    saveCalibration(calibration);
-    setStatus("weissabgleich aus");
-    toastMsg("weissabgleich aus");
-    updateButtons();
-    return;
+  function rgbToHex(r, g, b) {
+    const to2 = (v) => v.toString(16).padStart(2, "0").toUpperCase();
+    return `#${to2(r)}${to2(g)}${to2(b)}`;
   }
 
-  wbMode = "calibrate";
-  setStatus("kalibrieren tippe auf weiss oder grau");
-  toastMsg("kalibrieren bereit");
-  updateButtons();
-});
+  function rgbToHsl(r, g, b) {
+    let rr = r / 255, gg = g / 255, bb = b / 255;
+    const max = Math.max(rr, gg, bb);
+    const min = Math.min(rr, gg, bb);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
 
-videoShell.addEventListener("contextmenu", (e) => { e.preventDefault(); });
-
-videoShell.addEventListener("pointerdown", (e) => {
-  if (!stream) return;
-  e.preventDefault();
-  handleTap(e.clientX, e.clientY);
-});
-
-document.addEventListener("click", (e) => {
-  const t = e.target;
-  if (!t) return;
-  const key = t.getAttribute("data-copy");
-  if (!key) return;
-  const el = document.getElementById(key);
-  if (!el) return;
-  copyText(el.textContent || "");
-});
-
-async function startCamera() {
-  try {
-    setStatus("kamera start");
-
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: false
-    });
-
-    video.srcObject = stream;
-    await video.play();
-
-    videoTrack = stream.getVideoTracks()[0];
-
-    await detectLightSupport();
-    setStatus("kamera bereit");
-    toastMsg("bereit");
-    updateButtons();
-  } catch (err) {
-    console.error(err);
-    setStatus("kamera fehler erlaubnis pruefen");
-    toastMsg("kamera fehler");
-    stopCamera();
-  }
-}
-
-function stopCamera() {
-  try {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-  } catch (_) {}
-
-  stream = null;
-  videoTrack = null;
-
-  lightSupported = false;
-  lightOn = false;
-
-  wbMode = "idle";
-
-  updateButtons();
-}
-
-async function detectLightSupport() {
-  lightSupported = false;
-  if (!videoTrack) return;
-
-  const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : null;
-  lightSupported = !!(caps && typeof caps.torch !== "undefined");
-}
-
-async function toggleLight() {
-  if (!videoTrack) {
-    setStatus("starte kamera zuerst");
-    return;
-  }
-  if (!lightSupported) {
-    setStatus("licht nicht verfuegbar");
-    return;
-  }
-
-  try {
-    lightOn = !lightOn;
-    await videoTrack.applyConstraints({ advanced: [{ torch: lightOn }] });
-    setStatus(lightOn ? "licht an" : "licht aus");
-    updateButtons();
-  } catch (err) {
-    console.error(err);
-    lightOn = false;
-    setStatus("licht fehler");
-    updateButtons();
-  }
-}
-
-function updateButtons() {
-  const running = !!stream;
-
-  btnStart.textContent = running ? "kamera aus" : "kamera starten";
-
-  btnLight.disabled = !running || !lightSupported;
-  btnWB.disabled = !running;
-
-  btnLight.textContent = lightOn ? "licht an" : "licht aus";
-
-  if (wbMode === "calibrate") {
-    btnWB.textContent = "tippe auf weiss";
-    return;
-  }
-
-  const wbOn = calibration && calibration.enabled;
-  btnWB.textContent = wbOn ? "weissabgleich an" : "kalibrieren";
-}
-
-function handleTap(clientX, clientY) {
-  const rect = video.getBoundingClientRect();
-  showRing(clientX, clientY, rect);
-
-  if (video.videoWidth === 0 || video.videoHeight === 0) return;
-
-  const x = Math.round((clientX - rect.left) * (video.videoWidth / rect.width));
-  const y = Math.round((clientY - rect.top) * (video.videoHeight / rect.height));
-
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-  const sample = sampleAverageRgb(x, y, 10);
-  if (!sample) return;
-
-  if (wbMode === "calibrate") {
-    applyCalibrationFromSample(sample);
-    wbMode = "idle";
-    updateButtons();
-    setStatus("weissabgleich an");
-    toastMsg("kalibriert");
-
-    const msg = "weissabgleich an";
-    setTimeout(() => {
-      if (statusText.textContent === msg) setStatus("bereit");
-    }, 5000);
-
-    return;
-  }
-
-  const rgbRaw = sample;
-  const rgb = applyCalibrationToRgb(rgbRaw);
-
-  renderResult(rgb, rgbRaw);
-}
-
-function showRing(clientX, clientY, rect) {
-  const x = clientX - rect.left;
-  const y = clientY - rect.top;
-
-  tapRing.style.left = `${x}px`;
-  tapRing.style.top = `${y}px`;
-
-  tapRing.classList.remove("show");
-  void tapRing.offsetWidth;
-  tapRing.classList.add("show");
-}
-
-function sampleAverageRgb(cx, cy, radius) {
-  const w = canvas.width;
-  const h = canvas.height;
-
-  const x0 = clampInt(cx - radius, 0, w - 1);
-  const y0 = clampInt(cy - radius, 0, h - 1);
-  const x1 = clampInt(cx + radius, 0, w - 1);
-  const y1 = clampInt(cy + radius, 0, h - 1);
-
-  const sw = x1 - x0 + 1;
-  const sh = y1 - y0 + 1;
-
-  try {
-    const img = ctx.getImageData(x0, y0, sw, sh);
-    const d = img.data;
-
-    let r = 0, g = 0, b = 0;
-    const n = sw * sh;
-
-    for (let i = 0; i < d.length; i += 4) {
-      r += d[i];
-      g += d[i + 1];
-      b += d[i + 2];
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case rr: h = (gg - bb) / d + (gg < bb ? 6 : 0); break;
+        case gg: h = (bb - rr) / d + 2; break;
+        case bb: h = (rr - gg) / d + 4; break;
+      }
+      h = h / 6;
     }
 
     return {
-      r: Math.round(r / n),
-      g: Math.round(g / n),
-      b: Math.round(b / n)
+      h: Math.round(h * 360),
+      s: Math.round(s * 100),
+      l: Math.round(l * 100)
     };
-  } catch (err) {
-    console.error(err);
-    setStatus("pixel lesen blockiert");
-    return null;
   }
-}
 
-function applyCalibrationFromSample(sample) {
-  const target = 235;
-
-  const refR = Math.max(1, sample.r);
-  const refG = Math.max(1, sample.g);
-  const refB = Math.max(1, sample.b);
-
-  const gainR = clampNum(target / refR, 0.5, 3.0);
-  const gainG = clampNum(target / refG, 0.5, 3.0);
-  const gainB = clampNum(target / refB, 0.5, 3.0);
-
-  calibration = {
-    enabled: true,
-    gainR,
-    gainG,
-    gainB,
-    refR,
-    refG,
-    refB
-  };
-
-  saveCalibration(calibration);
-}
-
-function applyCalibrationToRgb(rgb) {
-  if (!calibration || !calibration.enabled) return rgb;
-
-  const r = clampInt(Math.round(rgb.r * calibration.gainR), 0, 255);
-  const g = clampInt(Math.round(rgb.g * calibration.gainG), 0, 255);
-  const b = clampInt(Math.round(rgb.b * calibration.gainB), 0, 255);
-
-  return { r, g, b };
-}
-
-function renderResult(rgb, rgbRaw) {
-  const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
-  const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-
-  const name = getColorName(rgb.r, rgb.g, rgb.b);
-  const wbOn = calibration && calibration.enabled;
-
-  swatch.style.background = hex;
-  colorNameEl.textContent = name;
-  colorDescEl.textContent = wbOn
-    ? `korrigiert aus ${rgbRaw.r}, ${rgbRaw.g}, ${rgbRaw.b}`
-    : `raw ${rgbRaw.r}, ${rgbRaw.g}, ${rgbRaw.b}`;
-
-  outHex.textContent = hex;
-  outRgb.textContent = `${rgb.r}, ${rgb.g}, ${rgb.b}`;
-  outHsl.textContent = `${hsl.h} ${hsl.s}% ${hsl.l}%`;
-  outCss.textContent = `color: ${hex}; background: ${hex};`;
-
-  toastMsg("gemessen");
-}
-
-function rgbToHex(r, g, b) {
-  return "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
-}
-
-function rgbToHsl(r, g, b) {
-  let rr = r / 255, gg = g / 255, bb = b / 255;
-
-  const max = Math.max(rr, gg, bb);
-  const min = Math.min(rr, gg, bb);
-  let h = 0, s = 0;
-  const l = (max + min) / 2;
-
-  const d = max - min;
-  if (d !== 0) {
-    s = d / (1 - Math.abs(2 * l - 1));
-    switch (max) {
-      case rr: h = ((gg - bb) / d) % 6; break;
-      case gg: h = (bb - rr) / d + 2; break;
-      case bb: h = (rr - gg) / d + 4; break;
+  function safeCopy(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(() => {
+        prompt("Copy", text);
+      });
     }
-    h = Math.round(h * 60);
-    if (h < 0) h += 360;
+    prompt("Copy", text);
+    return Promise.resolve();
   }
 
-  return {
-    h,
-    s: Math.round(s * 100),
-    l: Math.round(l * 100)
-  };
-}
-
-function clampInt(v, min, max) {
-  return Math.max(min, Math.min(max, v));
-}
-
-function clampNum(v, min, max) {
-  return Math.max(min, Math.min(max, v));
-}
-
-function copyText(text) {
-  if (!text) return;
-  navigator.clipboard.writeText(text).then(() => {
-    toastMsg("kopiert");
-  }).catch(() => {
+  function loadWb() {
     try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      toastMsg("kopiert");
-    } catch (_) {
-      toastMsg("copy fehler");
-    }
-  });
-}
-
-function toastMsg(msg) {
-  toast.textContent = msg;
-  setTimeout(() => {
-    if (toast.textContent === msg) toast.textContent = "";
-  }, 900);
-}
-
-function setStatus(msg) {
-  statusText.textContent = msg;
-}
-
-function saveCalibration(obj) {
-  try {
-    localStorage.setItem(CAL_KEY, JSON.stringify(obj));
-  } catch (_) {}
-}
-
-function loadCalibration() {
-  try {
-    const raw = localStorage.getItem(CAL_KEY);
-    if (!raw) return { enabled: false };
-    const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== "object") return { enabled: false };
-    if (typeof obj.enabled !== "boolean") obj.enabled = false;
-    return obj;
-  } catch (_) {
-    return { enabled: false };
+      const raw = localStorage.getItem(LS_WB_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      if (!obj) return;
+      if (typeof obj.gainR === "number" && typeof obj.gainG === "number" && typeof obj.gainB === "number") {
+        wb.has = true;
+        wb.enabled = !!obj.enabled;
+        wb.gainR = obj.gainR;
+        wb.gainG = obj.gainG;
+        wb.gainB = obj.gainB;
+      }
+    } catch {}
   }
-}
 
-function getColorName(r, g, b) {
-  const hsl = rgbToHsl(r, g, b);
-  const h = hsl.h;
-  const s = hsl.s;
-  const l = hsl.l;
+  function saveWb() {
+    try {
+      localStorage.setItem(LS_WB_KEY, JSON.stringify({
+        enabled: wb.enabled,
+        gainR: wb.gainR,
+        gainG: wb.gainG,
+        gainB: wb.gainB
+      }));
+    } catch {}
+  }
 
-  if (l <= 8) return "schwarz";
-  if (l >= 92 && s <= 12) return "weiss";
-  if (s <= 10 && l > 8 && l < 92) return "grau";
+  function clearWb() {
+    wb.has = false;
+    wb.enabled = false;
+    wb.gainR = 1;
+    wb.gainG = 1;
+    wb.gainB = 1;
+    try { localStorage.removeItem(LS_WB_KEY); } catch {}
+  }
 
-  if (h >= 0 && h < 15) return l < 50 ? "dunkelrot" : "rot";
-  if (h >= 15 && h < 35) return "orange";
-  if (h >= 35 && h < 60) return "gelb";
-  if (h >= 60 && h < 95) return "gelbgruen";
-  if (h >= 95 && h < 150) return "gruen";
-  if (h >= 150 && h < 190) return "tuerkis";
-  if (h >= 190 && h < 230) return "cyanblau";
-  if (h >= 230 && h < 265) return "blau";
-  if (h >= 265 && h < 295) return "violett";
-  if (h >= 295 && h < 330) return "magenta";
-  if (h >= 330 && h <= 360) return "rot";
+  function applyWbToRgb(r, g, b) {
+    if (!wb.has || !wb.enabled) return { r, g, b };
+    const rr = clamp255(Math.round(r * wb.gainR));
+    const gg = clamp255(Math.round(g * wb.gainG));
+    const bb = clamp255(Math.round(b * wb.gainB));
+    return { r: rr, g: gg, b: bb };
+  }
 
-  return "farbe";
-}
+  function computeWbFromWhiteSample(r, g, b) {
+    const avg = (r + g + b) / 3;
+    const gainR = avg / (r || 1);
+    const gainG = avg / (g || 1);
+    const gainB = avg / (b || 1);
+
+    const norm = Math.max(gainR, gainG, gainB);
+    wb.gainR = gainR / norm;
+    wb.gainG = gainG / norm;
+    wb.gainB = gainB / norm;
+
+    wb.has = true;
+    wb.enabled = true;
+    saveWb();
+  }
+
+  function ensureUI() {
+    let root = $("cf-root");
+    if (!root) {
+      root = document.createElement("div");
+      root.id = "cf-root";
+      root.style.maxWidth = "720px";
+      root.style.margin = "0 auto";
+      root.style.padding = "12px";
+      document.body.prepend(root);
+    }
+
+    let header = $("cf-header");
+    if (!header) {
+      header = document.createElement("div");
+      header.id = "cf-header";
+      header.style.textAlign = "center";
+      header.style.fontSize = "22px";
+      header.style.fontWeight = "700";
+      header.style.margin = "8px 0 12px 0";
+      header.textContent = "ColorFinder";
+      root.appendChild(header);
+    }
+
+    let videoWrap = $("cf-videoWrap");
+    if (!videoWrap) {
+      videoWrap = document.createElement("div");
+      videoWrap.id = "cf-videoWrap";
+      videoWrap.style.position = "relative";
+      videoWrap.style.borderRadius = "16px";
+      videoWrap.style.overflow = "hidden";
+      videoWrap.style.border = "1px solid rgba(0,0,0,0.12)";
+      root.appendChild(videoWrap);
+    }
+
+    let hint = $("cf-hint");
+    if (!hint) {
+      hint = document.createElement("div");
+      hint.id = "cf-hint";
+      hint.textContent = "Tippe ins Bild";
+      hint.style.position = "absolute";
+      hint.style.left = "10px";
+      hint.style.top = "10px";
+      hint.style.padding = "6px 10px";
+      hint.style.borderRadius = "12px";
+      hint.style.fontSize = "13px";
+      hint.style.background = "rgba(255,255,255,0.85)";
+      hint.style.backdropFilter = "blur(6px)";
+      videoWrap.appendChild(hint);
+    }
+
+    let video = $("cf-video");
+    if (!video) {
+      video = document.createElement("video");
+      video.id = "cf-video";
+      video.playsInline = true;
+      video.autoplay = true;
+      video.muted = true;
+      video.style.display = "block";
+      video.style.width = "100%";
+      video.style.height = "auto";
+      videoWrap.appendChild(video);
+    }
+
+    let overlay = $("cf-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "cf-overlay";
+      overlay.style.position = "absolute";
+      overlay.style.inset = "0";
+      overlay.style.cursor = "crosshair";
+      videoWrap.appendChild(overlay);
+    }
+
+    let ring = $("cf-ring");
+    if (!ring) {
+      ring = document.createElement("div");
+      ring.id = "cf-ring";
+      ring.style.position = "absolute";
+      ring.style.width = "44px";
+      ring.style.height = "44px";
+      ring.style.borderRadius = "999px";
+      ring.style.border = "3px solid rgba(255,255,255,0.9)";
+      ring.style.boxShadow = "0 0 0 3px rgba(0,0,0,0.18)";
+      ring.style.transform = "translate(-50%,-50%)";
+      ring.style.pointerEvents = "none";
+      ring.style.display = "none";
+      overlay.appendChild(ring);
+    }
+
+    let panel = $("cf-panel");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "cf-panel";
+      panel.style.marginTop = "12px";
+      panel.style.padding = "12px";
+      panel.style.borderRadius = "16px";
+      panel.style.border = "1px solid rgba(0,0,0,0.12)";
+      panel.style.display = "grid";
+      panel.style.gridTemplateColumns = "1fr";
+      panel.style.gap = "10px";
+      root.appendChild(panel);
+    }
+
+    let rowBtns = $("cf-rowBtns");
+    if (!rowBtns) {
+      rowBtns = document.createElement("div");
+      rowBtns.id = "cf-rowBtns";
+      rowBtns.style.display = "flex";
+      rowBtns.style.gap = "8px";
+      rowBtns.style.flexWrap = "wrap";
+      panel.appendChild(rowBtns);
+    }
+
+    function mkBtn(id, text) {
+      let b = $(id);
+      if (!b) {
+        b = document.createElement("button");
+        b.id = id;
+        b.textContent = text;
+        b.style.padding = "10px 12px";
+        b.style.borderRadius = "12px";
+        b.style.border = "1px solid rgba(0,0,0,0.15)";
+        b.style.background = "white";
+        b.style.cursor = "pointer";
+        rowBtns.appendChild(b);
+      }
+      return b;
+    }
+
+    const btnStartStop = mkBtn("cf-btnStartStop", "Kamera starten");
+    const btnTorch = mkBtn("cf-btnTorch", "Licht");
+    const btnWb = mkBtn("cf-btnWb", "Kalibrieren");
+
+    let values = $("cf-values");
+    if (!values) {
+      values = document.createElement("div");
+      values.id = "cf-values";
+      values.style.display = "grid";
+      values.style.gap = "8px";
+      panel.appendChild(values);
+    }
+
+    function mkField(label, idVal, idCopy) {
+      let wrap = document.createElement("div");
+      wrap.style.display = "grid";
+      wrap.style.gridTemplateColumns = "92px 1fr auto";
+      wrap.style.alignItems = "center";
+      wrap.style.ga
