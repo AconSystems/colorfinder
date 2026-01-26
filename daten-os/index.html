@@ -5,72 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>ColorFinder</title>
 
-  <!-- PWA -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2b2b2b">
 
-  <!-- Styles -->
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
   <div id="app">
 
-    <!-- Start Screen -->
     <div id="startScreen">
       <h1>ColorFinder</h1>
       <button id="startButton">Kamera starten</button>
-      <p class="hint">
-        Tippe auf eine Stelle im Bild, um die Farbe zu erkennen
-      </p>
+      <p class="hint">Tippe auf eine Stelle im Bild, um die Farbe zu erkennen</p>
     </div>
 
-    <!-- Camera Screen -->
     <div id="cameraScreen" hidden>
-      <video
-        id="video"
-        autoplay
-        playsinline
-        muted
-      ></video>
-
+      <video id="video" autoplay playsinline muted></video>
       <canvas id="canvas" hidden></canvas>
 
-      <!-- Result -->
+      <div id="controls">
+        <button id="torchToggle" disabled>Licht an</button>
+      </div>
+
       <div id="result">
-        <div class="row">
-          <span>Deutsch</span>
-          <button data-copy="de">–</button>
-        </div>
-        <div class="row">
-          <span>English</span>
-          <button data-copy="en">–</button>
-        </div>
-        <div class="row">
-          <span>HEX</span>
-          <button data-copy="hex">–</button>
-        </div>
-        <div class="row">
-          <span>RGB</span>
-          <button data-copy="rgb">–</button>
-        </div>
-        <div class="row">
-          <span>HSL</span>
-          <button data-copy="hsl">–</button>
-        </div>
-        <div class="row">
-          <span>CSS</span>
-          <button data-copy="css">–</button>
-        </div>
+        <div class="row"><span>Deutsch</span><button data-copy="de">–</button></div>
+        <div class="row"><span>English</span><button data-copy="en">–</button></div>
+        <div class="row"><span>HEX</span><button data-copy="hex">–</button></div>
+        <div class="row"><span>RGB</span><button data-copy="rgb">–</button></div>
+        <div class="row"><span>HSL</span><button data-copy="hsl">–</button></div>
+        <div class="row"><span>CSS</span><button data-copy="css">–</button></div>
       </div>
     </div>
 
   </div>
 
-  <!-- App Logic -->
   <script src="app.js"></script>
 
-  <!-- Service Worker -->
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
@@ -78,6 +49,5 @@
       });
     }
   </script>
-
 </body>
 </html>
