@@ -6,7 +6,7 @@ komplette datei ersetzen
 bei jedem release VERSION erhoehen
 */
 
-const VERSION = "v10";
+const VERSION = "v11";
 const CACHE_NAME = "colorfinder-cache-" + VERSION;
 
 const PRECACHE_URLS = [
@@ -23,7 +23,10 @@ const PRECACHE_URLS = [
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.addAll(PRECACHE_URLS);
+    })()
   );
 });
 
@@ -41,12 +44,6 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-self.addEventListener("message", (event) => {
-  if (event && event.data === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
-});
-
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -54,8 +51,34 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  if (req.mode === "navigate") {
+    event.respondWith(offlineFirstNavigate(req));
+    return;
+  }
+
   event.respondWith(staleWhileRevalidate(req));
 });
+
+async function offlineFirstNavigate(req) {
+  const cache = await caches.open(CACHE_NAME);
+
+  const cachedIndex =
+    (await cache.match("./index.html", { ignoreSearch: true })) ||
+    (await cache.match("./", { ignoreSearch: true }));
+
+  if (cachedIndex) return cachedIndex;
+
+  try {
+    const res = await fetch(req);
+    if (res && res.ok && res.type === "basic") cache.put(req, res.clone());
+    return res;
+  } catch (_) {
+    return new Response("offline", {
+      status: 503,
+      headers: { "Content-Type": "text/plain" }
+    });
+  }
+}
 
 async function staleWhileRevalidate(req) {
   const cache = await caches.open(CACHE_NAME);
@@ -63,22 +86,15 @@ async function staleWhileRevalidate(req) {
 
   const networkPromise = fetch(req)
     .then((res) => {
-      if (res && res.ok && res.type === "basic") {
-        cache.put(req, res.clone());
-      }
+      if (res && res.ok && res.type === "basic") cache.put(req, res.clone());
       return res;
     })
     .catch(() => null);
 
-  return cached || (await networkPromise) || cachedFallback(req);
+  return cached || (await networkPromise) || cached || offlineText();
 }
 
-async function cachedFallback(req) {
-  if (req.mode === "navigate") {
-    const cache = await caches.open(CACHE_NAME);
-    const cachedIndex = await cache.match("./index.html");
-    if (cachedIndex) return cachedIndex;
-  }
+function offlineText() {
   return new Response("offline", {
     status: 503,
     headers: { "Content-Type": "text/plain" }
