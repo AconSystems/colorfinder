@@ -1,274 +1,435 @@
-const startButton = document.getElementById("startButton");
-const startScreen = document.getElementById("startScreen");
-const cameraScreen = document.getElementById("cameraScreen");
+"use strict";
+
+/*
+ColorFinder FarbFinder
+live kamera tap farbe torch weissabgleich
+komplette datei ersetzen
+*/
 
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-const buttons = Array.from(document.querySelectorAll("#result button[data-copy]"));
+const btnStart = document.getElementById("btnStart");
+const btnTorch = document.getElementById("btnTorch");
+const btnCalibrate = document.getElementById("btnCalibrate");
+const btnCalOff = document.getElementById("btnCalOff");
 
-const torchBtn = document.getElementById("torchToggle");
-let torchOn = false;
-let videoTrack = null;
+const statusText = document.getElementById("statusText");
+const torchText = document.getElementById("torchText");
+const calText = document.getElementById("calText");
+
+const swatch = document.getElementById("swatch");
+const colorNameEl = document.getElementById("colorName");
+const colorDescEl = document.getElementById("colorDesc");
+
+const outHex = document.getElementById("outHex");
+const outRgb = document.getElementById("outRgb");
+const outHsl = document.getElementById("outHsl");
+const outCss = document.getElementById("outCss");
+
+const toast = document.getElementById("toast");
 
 let stream = null;
+let videoTrack = null;
 
-const COLORS = [
-  { de: "schwarz",   en: "black",     css: "black",     rgb: [0, 0, 0] },
-  { de: "weiß",      en: "white",     css: "white",     rgb: [255, 255, 255] },
-  { de: "grau",      en: "gray",      css: "gray",      rgb: [128, 128, 128] },
-  { de: "rot",       en: "red",       css: "red",       rgb: [255, 0, 0] },
-  { de: "grün",      en: "green",     css: "green",     rgb: [0, 128, 0] },
-  { de: "blau",      en: "blue",      css: "blue",      rgb: [0, 0, 255] },
-  { de: "gelb",      en: "yellow",    css: "yellow",    rgb: [255, 255, 0] },
-  { de: "orange",    en: "orange",    css: "orange",    rgb: [255, 165, 0] },
-  { de: "violett",   en: "purple",    css: "purple",    rgb: [128, 0, 128] },
-  { de: "pink",      en: "pink",      css: "pink",      rgb: [255, 192, 203] },
-  { de: "braun",     en: "brown",     css: "brown",     rgb: [165, 42, 42] },
-  { de: "beige",     en: "beige",     css: "beige",     rgb: [245, 245, 220] },
-  { de: "türkis",    en: "turquoise", css: "turquoise", rgb: [64, 224, 208] },
-  { de: "cyan",      en: "cyan",      css: "cyan",      rgb: [0, 255, 255] },
-  { de: "magenta",   en: "magenta",   css: "magenta",   rgb: [255, 0, 255] },
-  { de: "marine",    en: "navy",      css: "navy",      rgb: [0, 0, 128] },
-  { de: "oliv",      en: "olive",     css: "olive",     rgb: [128, 128, 0] },
-  { de: "bordeaux",  en: "burgundy",  css: "maroon",    rgb: [128, 0, 32] },
-  { de: "gold",      en: "gold",      css: "gold",      rgb: [255, 215, 0] },
-  { de: "silber",    en: "silver",    css: "silver",    rgb: [192, 192, 192] }
-];
+let torchSupported = false;
+let torchOn = false;
 
-function clampByte(n){
-  return Math.max(0, Math.min(255, Math.round(n)));
+let calibrating = false;
+
+const CAL_KEY = "colorfinder_whitebalance_v1";
+let calibration = loadCalibration(); 
+// calibration format
+// { enabled: true, gainR: number, gainG: number, gainB: number, refR: number, refG: number, refB: number }
+
+setStatus("bereit");
+
+updateCalUi();
+updateTorchUi();
+
+btnStart.addEventListener("click", async () => {
+  await startCamera();
+});
+
+btnTorch.addEventListener("click", async () => {
+  await toggleTorch();
+});
+
+btnCalibrate.addEventListener("click", () => {
+  if (!stream) {
+    setStatus("starte kamera zuerst");
+    return;
+  }
+  calibrating = true;
+  setStatus("kalibrierung bereit tippe auf weiss oder neutral grau");
+  toastMsg("kalibrierung modus an tippe ins bild");
+});
+
+btnCalOff.addEventListener("click", () => {
+  calibrating = false;
+  if (calibration && calibration.enabled) {
+    calibration.enabled = false;
+    saveCalibration(calibration);
+  }
+  updateCalUi();
+  setStatus("kalibrierung aus");
+  toastMsg("kalibrierung aus");
+});
+
+video.addEventListener("click", (e) => {
+  if (!stream) return;
+  handleTap(e);
+});
+
+document.addEventListener("click", (e) => {
+  const t = e.target;
+  if (!t) return;
+  const key = t.getAttribute("data-copy");
+  if (!key) return;
+  const el = document.getElementById(key);
+  if (!el) return;
+  copyText(el.textContent || "");
+});
+
+async function startCamera() {
+  try {
+    setStatus("kamera start");
+    if (stream) {
+      stopCamera();
+    }
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+
+    video.srcObject = stream;
+    await video.play();
+
+    videoTrack = stream.getVideoTracks()[0];
+
+    await detectTorchSupport();
+    updateTorchUi();
+
+    setStatus("kamera bereit tippe ins bild");
+    toastMsg("bereit");
+  } catch (err) {
+    console.error(err);
+    setStatus("kamera fehler erlaubnis pruefen");
+    toastMsg("kamera fehler");
+  }
 }
 
-function rgbToHex(r, g, b){
-  const to2 = (x) => x.toString(16).padStart(2, "0").toUpperCase();
-  return "#" + to2(clampByte(r)) + to2(clampByte(g)) + to2(clampByte(b));
+function stopCamera() {
+  try {
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+    }
+  } catch (_) {}
+  stream = null;
+  videoTrack = null;
+  torchSupported = false;
+  torchOn = false;
+  updateTorchUi();
 }
 
-function rgbToHsl(r, g, b){
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
+async function detectTorchSupport() {
+  torchSupported = false;
+  if (!videoTrack) return;
+
+  const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : null;
+  if (caps && typeof caps.torch !== "undefined") {
+    torchSupported = true;
+    torchText.textContent = "bereit";
+  } else {
+    torchSupported = false;
+    torchText.textContent = "nicht verfuegbar";
+  }
+}
+
+async function toggleTorch() {
+  if (!videoTrack) {
+    setStatus("starte kamera zuerst");
+    return;
+  }
+  if (!torchSupported) {
+    setStatus("torch nicht verfuegbar");
+    return;
+  }
+
+  try {
+    torchOn = !torchOn;
+    await videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] });
+    updateTorchUi();
+    setStatus(torchOn ? "licht an" : "licht aus");
+  } catch (err) {
+    console.error(err);
+    torchOn = false;
+    updateTorchUi();
+    setStatus("torch fehler");
+  }
+}
+
+function updateTorchUi() {
+  if (!videoTrack) {
+    btnTorch.disabled = true;
+    btnTorch.textContent = "licht aus";
+    torchText.textContent = "aus";
+    return;
+  }
+
+  btnTorch.disabled = !torchSupported;
+  btnTorch.textContent = torchOn ? "licht an" : "licht aus";
+  torchText.textContent = torchSupported ? (torchOn ? "an" : "aus") : "nicht verfuegbar";
+}
+
+function updateCalUi() {
+  const enabled = calibration && calibration.enabled;
+  calText.textContent = enabled ? "an" : "aus";
+}
+
+function handleTap(e) {
+  const rect = video.getBoundingClientRect();
+
+  const x = Math.round((e.clientX - rect.left) * (video.videoWidth / rect.width));
+  const y = Math.round((e.clientY - rect.top) * (video.videoHeight / rect.height));
+
+  if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const sample = sampleAverageRgb(x, y, 10);
+  if (!sample) return;
+
+  if (calibrating) {
+    applyCalibrationFromSample(sample);
+    calibrating = false;
+    updateCalUi();
+    setStatus("kalibriert tippe normal zum messen");
+    toastMsg("kalibrierung gespeichert");
+    return;
+  }
+
+  const rgbRaw = sample;
+  const rgb = applyCalibrationToRgb(rgbRaw);
+
+  renderResult(rgb, rgbRaw);
+}
+
+function sampleAverageRgb(cx, cy, radius) {
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const x0 = clampInt(cx - radius, 0, w - 1);
+  const y0 = clampInt(cy - radius, 0, h - 1);
+  const x1 = clampInt(cx + radius, 0, w - 1);
+  const y1 = clampInt(cy + radius, 0, h - 1);
+
+  const sw = x1 - x0 + 1;
+  const sh = y1 - y0 + 1;
+
+  try {
+    const img = ctx.getImageData(x0, y0, sw, sh);
+    const d = img.data;
+
+    let r = 0, g = 0, b = 0;
+    const n = sw * sh;
+
+    for (let i = 0; i < d.length; i += 4) {
+      r += d[i];
+      g += d[i + 1];
+      b += d[i + 2];
+    }
+
+    return {
+      r: Math.round(r / n),
+      g: Math.round(g / n),
+      b: Math.round(b / n)
+    };
+  } catch (err) {
+    console.error(err);
+    setStatus("pixel lesen blockiert");
+    return null;
+  }
+}
+
+function applyCalibrationFromSample(sample) {
+  // ziel ist neutral weiss
+  const target = 255;
+
+  const refR = Math.max(1, sample.r);
+  const refG = Math.max(1, sample.g);
+  const refB = Math.max(1, sample.b);
+
+  const gainR = target / refR;
+  const gainG = target / refG;
+  const gainB = target / refB;
+
+  calibration = {
+    enabled: true,
+    gainR,
+    gainG,
+    gainB,
+    refR,
+    refG,
+    refB
+  };
+
+  saveCalibration(calibration);
+
+  calText.textContent = "an";
+}
+
+function applyCalibrationToRgb(rgb) {
+  if (!calibration || !calibration.enabled) return rgb;
+
+  const r = clampInt(Math.round(rgb.r * calibration.gainR), 0, 255);
+  const g = clampInt(Math.round(rgb.g * calibration.gainG), 0, 255);
+  const b = clampInt(Math.round(rgb.b * calibration.gainB), 0, 255);
+
+  return { r, g, b };
+}
+
+function renderResult(rgb, rgbRaw) {
+  const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+  const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+
+  const name = getColorName(rgb.r, rgb.g, rgb.b);
+  const extra = calibration && calibration.enabled
+    ? `korrigiert aus raw rgb ${rgbRaw.r}, ${rgbRaw.g}, ${rgbRaw.b}`
+    : `raw rgb ${rgbRaw.r}, ${rgbRaw.g}, ${rgbRaw.b}`;
+
+  swatch.style.background = hex;
+  colorNameEl.textContent = name;
+  colorDescEl.textContent = extra;
+
+  outHex.textContent = hex;
+  outRgb.textContent = `${rgb.r}, ${rgb.g}, ${rgb.b}`;
+  outHsl.textContent = `${hsl.h} ${hsl.s}% ${hsl.l}%`;
+  outCss.textContent = `color: ${hex}; background: ${hex};`;
+
+  toastMsg("gemessen");
+}
+
+function rgbToHex(r, g, b) {
+  return "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+function rgbToHsl(r, g, b) {
+  let rr = r / 255, gg = g / 255, bb = b / 255;
+
+  const max = Math.max(rr, gg, bb);
+  const min = Math.min(rr, gg, bb);
   let h = 0, s = 0;
   const l = (max + min) / 2;
-  const d = max - min;
 
+  const d = max - min;
   if (d !== 0) {
     s = d / (1 - Math.abs(2 * l - 1));
     switch (max) {
-      case r: h = ((g - b) / d) % 6; break;
-      case g: h = (b - r) / d + 2; break;
-      case b: h = (r - g) / d + 4; break;
+      case rr: h = ((gg - bb) / d) % 6; break;
+      case gg: h = (bb - rr) / d + 2; break;
+      case bb: h = (rr - gg) / d + 4; break;
     }
     h = Math.round(h * 60);
     if (h < 0) h += 360;
   }
 
-  return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
-}
-
-function dist2(a, b){
-  const dr = a[0] - b[0];
-  const dg = a[1] - b[1];
-  const db = a[2] - b[2];
-  return dr * dr + dg * dg + db * db;
-}
-
-function nearestColor(r, g, b){
-  const target = [r, g, b];
-  let best = COLORS[0];
-  let bestD = Infinity;
-  for (const c of COLORS) {
-    const d = dist2(target, c.rgb);
-    if (d < bestD) {
-      bestD = d;
-      best = c;
-    }
-  }
-  return best;
-}
-
-function setButton(key, value){
-  const btn = buttons.find(b => b.dataset.copy === key);
-  if (!btn) return;
-  btn.textContent = value;
-  btn.dataset.value = value;
-}
-
-function showToast(text){
-  const el = document.createElement("div");
-  el.textContent = text;
-  el.style.position = "fixed";
-  el.style.left = "50%";
-  el.style.bottom = "18px";
-  el.style.transform = "translateX(-50%)";
-  el.style.background = "rgba(0,0,0,0.8)";
-  el.style.color = "#fff";
-  el.style.padding = "10px 12px";
-  el.style.borderRadius = "10px";
-  el.style.fontSize = "14px";
-  el.style.zIndex = "9999";
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 650);
-}
-
-function showTapMarker(clientX, clientY){
-  const m = document.createElement("div");
-  m.style.position = "fixed";
-  m.style.left = (clientX - 10) + "px";
-  m.style.top = (clientY - 10) + "px";
-  m.style.width = "20px";
-  m.style.height = "20px";
-  m.style.border = "2px solid #fff";
-  m.style.borderRadius = "50%";
-  m.style.zIndex = "9999";
-  m.style.pointerEvents = "none";
-  document.body.appendChild(m);
-  setTimeout(() => m.remove(), 350);
-}
-
-async function copyText(text){
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch (e) {}
-
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    ta.style.top = "-9999px";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    const ok = document.execCommand("copy");
-    ta.remove();
-    return ok;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function startCamera(){
-  const constraints = {
-    audio: false,
-    video: { facingMode: { ideal: "environment" } }
+  return {
+    h,
+    s: Math.round(s * 100),
+    l: Math.round(l * 100)
   };
-
-  stream = await navigator.mediaDevices.getUserMedia(constraints);
-  video.srcObject = stream;
-
-  videoTrack = stream.getVideoTracks()[0] || null;
-  if (torchBtn) {
-    torchBtn.disabled = true;
-    torchBtn.textContent = "Licht an";
-    torchOn = false;
-  }
-
-  await new Promise((resolve) => {
-    video.onloadedmetadata = () => resolve();
-  });
-
-  canvas.width = video.videoWidth || 1280;
-  canvas.height = video.videoHeight || 720;
-
-  await video.play();
-
-  startScreen.hidden = true;
-  cameraScreen.hidden = false;
-
-  if (torchBtn && videoTrack) {
-    const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : null;
-    torchBtn.disabled = !(caps && caps.torch);
-  }
-
-  showToast("Kamera bereit");
 }
 
-function pickColorFromTap(evt){
-  const rect = video.getBoundingClientRect();
-
-  const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
-  const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
-
-  const x = clientX - rect.left;
-  const y = clientY - rect.top;
-
-  if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
-
-  showTapMarker(clientX, clientY);
-
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-  const px = Math.floor((x / rect.width) * canvas.width);
-  const py = Math.floor((y / rect.height) * canvas.height);
-
-  const data = ctx.getImageData(px, py, 1, 1).data;
-  const r = data[0], g = data[1], b = data[2];
-
-  const hex = rgbToHex(r, g, b);
-  const hsl = rgbToHsl(r, g, b);
-  const nearest = nearestColor(r, g, b);
-
-  setButton("de", nearest.de);
-  setButton("en", nearest.en);
-  setButton("hex", hex);
-  setButton("rgb", `rgb(${r}, ${g}, ${b})`);
-  setButton("hsl", `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)`);
-  setButton("css", nearest.css);
+function clampInt(v, min, max) {
+  return Math.max(min, Math.min(max, v));
 }
 
-async function setTorch(on){
-  if (!videoTrack) return false;
-
-  const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : null;
-  if (!caps || !caps.torch) return false;
-
-  try {
-    await videoTrack.applyConstraints({ advanced: [{ torch: on }] });
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-if (torchBtn) {
-  torchBtn.addEventListener("click", async () => {
-    torchOn = !torchOn;
-    const ok = await setTorch(torchOn);
-
-    if (!ok) {
-      torchOn = false;
-      torchBtn.textContent = "Licht an";
-      showToast("Lichtsteuerung nicht unterstuetzt");
-      return;
+function copyText(text) {
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    toastMsg("kopiert");
+  }).catch(() => {
+    // fallback
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      toastMsg("kopiert");
+    } catch (_) {
+      toastMsg("copy fehler");
     }
-
-    torchBtn.textContent = torchOn ? "Licht aus" : "Licht an";
-    showToast(torchOn ? "Licht an" : "Licht aus");
   });
 }
 
-startButton.addEventListener("click", async () => {
+function toastMsg(msg) {
+  toast.textContent = msg;
+  setTimeout(() => {
+    if (toast.textContent === msg) toast.textContent = "";
+  }, 1200);
+}
+
+function setStatus(msg) {
+  statusText.textContent = msg;
+}
+
+function saveCalibration(obj) {
   try {
-    await startCamera();
-  } catch (e) {
-    showToast("Kamera Fehler oder keine Freigabe");
+    localStorage.setItem(CAL_KEY, JSON.stringify(obj));
+  } catch (_) {}
+}
+
+function loadCalibration() {
+  try {
+    const raw = localStorage.getItem(CAL_KEY);
+    if (!raw) return { enabled: false };
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object") return { enabled: false };
+    if (typeof obj.enabled !== "boolean") obj.enabled = false;
+    return obj;
+  } catch (_) {
+    return { enabled: false };
   }
-});
+}
 
-video.addEventListener("click", pickColorFromTap, { passive: true });
-video.addEventListener("touchstart", pickColorFromTap, { passive: true });
+/*
+farbnamen logik simple robust
+*/
 
-buttons.forEach((btn) => {
-  btn.addEventListener("click", async () => {
-    const text = btn.dataset.value || btn.textContent || "";
-    if (!text) return;
-    const ok = await copyText(text);
-    showToast(ok ? "kopiert" : "copy nicht moeglich");
-  });
-});
+function getColorName(r, g, b) {
+  const hsl = rgbToHsl(r, g, b);
+  const h = hsl.h;
+  const s = hsl.s;
+  const l = hsl.l;
+
+  if (l <= 8) return "schwarz";
+  if (l >= 92 && s <= 12) return "weiss";
+  if (s <= 10 && l > 8 && l < 92) return "grau";
+
+  if (h >= 0 && h < 15) return l < 50 ? "dunkelrot" : "rot";
+  if (h >= 15 && h < 35) return "orange";
+  if (h >= 35 && h < 60) return "gelb";
+  if (h >= 60 && h < 95) return "gelbgruen";
+  if (h >= 95 && h < 150) return "gruen";
+  if (h >= 150 && h < 190) return "tuerkis";
+  if (h >= 190 && h < 230) return "cyanblau";
+  if (h >= 230 && h < 265) return "blau";
+  if (h >= 265 && h < 295) return "violett";
+  if (h >= 295 && h < 330) return "magenta";
+  if (h >= 330 && h <= 360) return "rot";
+
+  return "farbe";
+}
