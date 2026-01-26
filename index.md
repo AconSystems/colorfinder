@@ -48,6 +48,36 @@ Es handelt sich um eine Methode, nicht um ein gepflegtes Softwareprodukt.
 
 ---
 
+### Alltag und Nutzung für farbenblinde Menschen
+
+Die mobile Nutzung ist ein zentraler Bestandteil der Methode.
+
+Mit der Offline-Web-Referenz kann die Kamera eines Handys genutzt werden,
+um Farben im Alltag eindeutig zu benennen.
+
+Beispiele:
+- Eine Hose, einen Pullover oder Kleidung fotografieren
+- Die Kamera auf einen Gegenstand halten
+- Auf eine Stelle tippen
+- Den eindeutigen Farbnamen erhalten
+
+Zusätzlich werden technische Farbwerte angezeigt.
+Diese können kopiert und weiterverwendet werden.
+
+So ist es möglich:
+- Kleidung eindeutig zu benennen
+- Farben bewusst zu kombinieren
+- Fehlentscheidungen zu vermeiden
+- Farben in Desktop-Programmen weiterzuverwenden
+- mit Farbwerten zu arbeiten, statt zu raten
+
+Für farbenblinde Menschen geht es dabei nicht um Nuancen,
+sondern um Klarheit.
+Zu wissen, ob etwas rot, grün, blau oder gelb ist,
+macht im Alltag einen entscheidenden Unterschied.
+
+---
+
 ### Referenz-Umsetzungen
 
 FarbFinder enthält Referenz-Umsetzungen, um die Methode praktisch anzuwenden.
@@ -62,7 +92,7 @@ FarbFinder enthält Referenz-Umsetzungen, um die Methode praktisch anzuwenden.
 **Optionaler Desktop-Starter**
 - Basierend auf Python 3
 - Startet die lokale Web-Oberfläche im Browser
-- Python muss installiert sein
+- Python muss installiert sein (macOS, Windows, Linux)
 
 Der Referenz-Code dient als Beispiel und kann vom Anwender angepasst oder erweitert werden.
 
@@ -143,6 +173,36 @@ When you purchase the method, you receive:
 - License and disclaimer texts
 
 This is a method, not a maintained software product.
+
+---
+
+### Everyday use for color-blind people
+
+Mobile use is a central part of the method.
+
+The offline web reference allows the use of a phone camera
+to unambiguously name colors in everyday situations.
+
+Examples:
+- Take a photo of trousers, a sweater or clothing
+- Point the camera at an object
+- Tap on a specific area
+- Receive a clear color name
+
+In addition, technical color values are displayed.
+These values can be copied and reused later.
+
+This makes it possible to:
+- Name clothing colors clearly
+- Combine colors consciously
+- Avoid wrong decisions
+- Reuse colors in desktop applications
+- Work with color values instead of guessing
+
+For color-blind people, this is not about nuances,
+but about clarity.
+Knowing whether something is red, green, blue or yellow
+makes a decisive difference in everyday life.
 
 ---
 
