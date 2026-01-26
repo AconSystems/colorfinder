@@ -2,7 +2,6 @@
 
 /*
 ColorFinder
-live kamera tap farbe licht weissabgleich
 komplette datei ersetzen
 */
 
@@ -39,13 +38,18 @@ let lightOn = false;
 let wbMode = "idle"; // idle | calibrate
 
 const CAL_KEY = "colorfinder_whitebalance_v3";
-let calibration = loadCalibration(); 
-// { enabled: boolean, gainR, gainG, gainB, refR, refG, refB }
+let calibration = loadCalibration();
 
 setStatus("bereit");
 updateButtons();
 
 btnStart.addEventListener("click", async () => {
+  if (stream) {
+    stopCamera();
+    setStatus("kamera aus");
+    toastMsg("kamera aus");
+    return;
+  }
   await startCamera();
 });
 
@@ -102,7 +106,6 @@ document.addEventListener("click", (e) => {
 async function startCamera() {
   try {
     setStatus("kamera start");
-    if (stream) stopCamera();
 
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -119,7 +122,7 @@ async function startCamera() {
     videoTrack = stream.getVideoTracks()[0];
 
     await detectLightSupport();
-    setStatus("kamera bereit tippe ins bild");
+    setStatus("kamera bereit");
     toastMsg("bereit");
     updateButtons();
   } catch (err) {
@@ -134,11 +137,15 @@ function stopCamera() {
   try {
     if (stream) stream.getTracks().forEach(t => t.stop());
   } catch (_) {}
+
   stream = null;
   videoTrack = null;
+
   lightSupported = false;
   lightOn = false;
+
   wbMode = "idle";
+
   updateButtons();
 }
 
@@ -147,11 +154,7 @@ async function detectLightSupport() {
   if (!videoTrack) return;
 
   const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : null;
-  if (caps && typeof caps.torch !== "undefined") {
-    lightSupported = true;
-  } else {
-    lightSupported = false;
-  }
+  lightSupported = !!(caps && typeof caps.torch !== "undefined");
 }
 
 async function toggleLight() {
@@ -180,6 +183,8 @@ async function toggleLight() {
 function updateButtons() {
   const running = !!stream;
 
+  btnStart.textContent = running ? "kamera aus" : "kamera starten";
+
   btnLight.disabled = !running || !lightSupported;
   btnWB.disabled = !running;
 
@@ -196,7 +201,6 @@ function updateButtons() {
 
 function handleTap(clientX, clientY) {
   const rect = video.getBoundingClientRect();
-
   showRing(clientX, clientY, rect);
 
   if (video.videoWidth === 0 || video.videoHeight === 0) return;
