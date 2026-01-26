@@ -6,16 +6,16 @@ komplette datei ersetzen
 bei jedem release VERSION erhoehen
 */
 
-const VERSION = "v7";
+const VERSION = "v8";
 const CACHE_NAME = "colorfinder-cache-" + VERSION;
 
-// passe die liste an falls du spaeter mehr files hast
 const PRECACHE_URLS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
   "./manifest.json",
+  "./sw.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
 ];
@@ -41,7 +41,6 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// optional: aus der app kannst du per postMessage "SKIP_WAITING" senden
 self.addEventListener("message", (event) => {
   if (event && event.data === "SKIP_WAITING") {
     self.skipWaiting();
@@ -50,13 +49,9 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-
-  // nur GET behandeln
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-
-  // nur same origin cachen
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(staleWhileRevalidate(req));
@@ -68,7 +63,6 @@ async function staleWhileRevalidate(req) {
 
   const networkPromise = fetch(req)
     .then((res) => {
-      // nur erfolgreiche basic responses cachen
       if (res && res.ok && res.type === "basic") {
         cache.put(req, res.clone());
       }
@@ -76,12 +70,10 @@ async function staleWhileRevalidate(req) {
     })
     .catch(() => null);
 
-  // wenn cache da ist sofort liefern sonst netz
   return cached || (await networkPromise) || cachedFallback(req);
 }
 
 async function cachedFallback(req) {
-  // fuer navigation immer index.html liefern wenn vorhanden
   if (req.mode === "navigate") {
     const cache = await caches.open(CACHE_NAME);
     const cachedIndex = await cache.match("./index.html");
