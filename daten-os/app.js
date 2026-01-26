@@ -1,6 +1,3 @@
-// ColorFinder app.js
-// iPhone Safari friendly: user gesture starts camera, tap picks pixel, shows values, copy buttons
-
 const startButton = document.getElementById("startButton");
 const startScreen = document.getElementById("startScreen");
 const cameraScreen = document.getElementById("cameraScreen");
@@ -10,6 +7,10 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
 const buttons = Array.from(document.querySelectorAll("#result button[data-copy]"));
+
+const torchBtn = document.getElementById("torchToggle");
+let torchOn = false;
+let videoTrack = null;
 
 let stream = null;
 
@@ -36,16 +37,16 @@ const COLORS = [
   { de: "silber",    en: "silver",    css: "silver",    rgb: [192, 192, 192] }
 ];
 
-function clampByte(n) {
+function clampByte(n){
   return Math.max(0, Math.min(255, Math.round(n)));
 }
 
-function rgbToHex(r, g, b) {
+function rgbToHex(r, g, b){
   const to2 = (x) => x.toString(16).padStart(2, "0").toUpperCase();
   return "#" + to2(clampByte(r)) + to2(clampByte(g)) + to2(clampByte(b));
 }
 
-function rgbToHsl(r, g, b) {
+function rgbToHsl(r, g, b){
   r /= 255; g /= 255; b /= 255;
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
@@ -64,21 +65,17 @@ function rgbToHsl(r, g, b) {
     if (h < 0) h += 360;
   }
 
-  return {
-    h: Math.round(h),
-    s: Math.round(s * 100),
-    l: Math.round(l * 100)
-  };
+  return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
 
-function dist2(a, b) {
+function dist2(a, b){
   const dr = a[0] - b[0];
   const dg = a[1] - b[1];
   const db = a[2] - b[2];
   return dr * dr + dg * dg + db * db;
 }
 
-function nearestColor(r, g, b) {
+function nearestColor(r, g, b){
   const target = [r, g, b];
   let best = COLORS[0];
   let bestD = Infinity;
@@ -92,14 +89,14 @@ function nearestColor(r, g, b) {
   return best;
 }
 
-function setButton(key, value) {
+function setButton(key, value){
   const btn = buttons.find(b => b.dataset.copy === key);
   if (!btn) return;
   btn.textContent = value;
   btn.dataset.value = value;
 }
 
-function showToast(text) {
+function showToast(text){
   const el = document.createElement("div");
   el.textContent = text;
   el.style.position = "fixed";
@@ -116,7 +113,7 @@ function showToast(text) {
   setTimeout(() => el.remove(), 650);
 }
 
-function showTapMarker(clientX, clientY) {
+function showTapMarker(clientX, clientY){
   const m = document.createElement("div");
   m.style.position = "fixed";
   m.style.left = (clientX - 10) + "px";
@@ -131,7 +128,7 @@ function showTapMarker(clientX, clientY) {
   setTimeout(() => m.remove(), 350);
 }
 
-async function copyText(text) {
+async function copyText(text){
   try {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
@@ -156,22 +153,26 @@ async function copyText(text) {
   }
 }
 
-async function startCamera() {
+async function startCamera(){
   const constraints = {
     audio: false,
-    video: {
-      facingMode: { ideal: "environment" }
-    }
+    video: { facingMode: { ideal: "environment" } }
   };
 
   stream = await navigator.mediaDevices.getUserMedia(constraints);
   video.srcObject = stream;
 
+  videoTrack = stream.getVideoTracks()[0] || null;
+  if (torchBtn) {
+    torchBtn.disabled = true;
+    torchBtn.textContent = "Licht an";
+    torchOn = false;
+  }
+
   await new Promise((resolve) => {
     video.onloadedmetadata = () => resolve();
   });
 
-  // Canvas size must match real video pixels
   canvas.width = video.videoWidth || 1280;
   canvas.height = video.videoHeight || 720;
 
@@ -180,10 +181,15 @@ async function startCamera() {
   startScreen.hidden = true;
   cameraScreen.hidden = false;
 
+  if (torchBtn && videoTrack) {
+    const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : null;
+    torchBtn.disabled = !(caps && caps.torch);
+  }
+
   showToast("Kamera bereit");
 }
 
-function pickColorFromTap(evt) {
+function pickColorFromTap(evt){
   const rect = video.getBoundingClientRect();
 
   const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
@@ -196,7 +202,6 @@ function pickColorFromTap(evt) {
 
   showTapMarker(clientX, clientY);
 
-  // draw current video frame to canvas
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
   const px = Math.floor((x / rect.width) * canvas.width);
@@ -217,6 +222,37 @@ function pickColorFromTap(evt) {
   setButton("css", nearest.css);
 }
 
+async function setTorch(on){
+  if (!videoTrack) return false;
+
+  const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : null;
+  if (!caps || !caps.torch) return false;
+
+  try {
+    await videoTrack.applyConstraints({ advanced: [{ torch: on }] });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+if (torchBtn) {
+  torchBtn.addEventListener("click", async () => {
+    torchOn = !torchOn;
+    const ok = await setTorch(torchOn);
+
+    if (!ok) {
+      torchOn = false;
+      torchBtn.textContent = "Licht an";
+      showToast("Lichtsteuerung nicht unterstuetzt");
+      return;
+    }
+
+    torchBtn.textContent = torchOn ? "Licht aus" : "Licht an";
+    showToast(torchOn ? "Licht an" : "Licht aus");
+  });
+}
+
 startButton.addEventListener("click", async () => {
   try {
     await startCamera();
@@ -225,24 +261,14 @@ startButton.addEventListener("click", async () => {
   }
 });
 
-// Tap / click on video to pick
 video.addEventListener("click", pickColorFromTap, { passive: true });
 video.addEventListener("touchstart", pickColorFromTap, { passive: true });
 
-// Copy buttons
 buttons.forEach((btn) => {
   btn.addEventListener("click", async () => {
     const text = btn.dataset.value || btn.textContent || "";
     if (!text) return;
     const ok = await copyText(text);
-    showToast(ok ? "kopiert" : "copy nicht möglich");
+    showToast(ok ? "kopiert" : "copy nicht moeglich");
   });
-});
-
-// Safety: stop camera if page hidden (optional)
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden && stream) {
-    // keep it running, or stop to save battery
-    // stream.getTracks().forEach(t => t.stop());
-  }
 });
