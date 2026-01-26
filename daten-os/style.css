@@ -30,15 +30,17 @@ body{
   backdrop-filter:blur(10px);
 }
 
+.brand{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
 .brand .title{
   font-size:18px;
   font-weight:700;
   letter-spacing:0.2px;
-}
-.brand .subtitle{
-  font-size:12px;
-  color:var(--muted);
-  margin-top:2px;
+  text-align:center;
 }
 
 .wrap{
