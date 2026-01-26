@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ColorFinder</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+
+  <meta name="theme-color" content="#2b2b2b">
+</head>
+
+<body>
+  <div id="app">
+
+    <div id="startScreen">
+      <h1>ColorFinder</h1>
+      <button id="startButton">Kamera starten</button>
+      <p class="hint">
+        Tippe auf eine Stelle im Bild, um die Farbe zu erkennen
+      </p>
+    </div>
+
+    <div id="cameraScreen" hidden>
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" hidden></canvas>
+
+      <div id="result">
+        <div class="row"><span>Deutsch</span><button data-copy="de"></button></div>
+        <div class="row"><span>English</span><button data-copy="en"></button></div>
+        <div class="row"><span>HEX</span><button data-copy="hex"></button></div>
+        <div class="row"><span>RGB</span><button data-copy="rgb"></button></div>
+        <div class="row"><span>HSL</span><button data-copy="hsl"></button></div>
+        <div class="row"><span>CSS</span><button data-copy="css"></button></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
