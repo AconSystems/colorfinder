@@ -290,4 +290,322 @@
       wrap.style.display = "grid";
       wrap.style.gridTemplateColumns = "92px 1fr auto";
       wrap.style.alignItems = "center";
-      wrap.style.ga
+      wrap.style.gap = "8px";
+
+      const l = document.createElement("div");
+      l.textContent = label;
+      l.style.opacity = "0.75";
+
+      let v = $(idVal);
+      if (!v) {
+        v = document.createElement("div");
+        v.id = idVal;
+        v.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+        v.style.fontSize = "14px";
+        v.textContent = "-";
+      }
+
+      let c = $(idCopy);
+      if (!c) {
+        c = document.createElement("button");
+        c.id = idCopy;
+        c.textContent = "Copy";
+        c.style.padding = "8px 10px";
+        c.style.borderRadius = "12px";
+        c.style.border = "1px solid rgba(0,0,0,0.15)";
+        c.style.background = "white";
+        c.style.cursor = "pointer";
+      }
+
+      wrap.appendChild(l);
+      wrap.appendChild(v);
+      wrap.appendChild(c);
+      values.appendChild(wrap);
+
+      return { v, c };
+    }
+
+    const fHex = mkField("HEX", "cf-hex", "cf-copyHex");
+    const fRgb = mkField("RGB", "cf-rgb", "cf-copyRgb");
+    const fHsl = mkField("HSL", "cf-hsl", "cf-copyHsl");
+    const fCss = mkField("CSS", "cf-css", "cf-copyCss");
+
+    let swStatus = $("cf-swStatus");
+    if (!swStatus) {
+      swStatus = document.createElement("div");
+      swStatus.id = "cf-swStatus";
+      swStatus.style.fontSize = "12px";
+      swStatus.style.opacity = "0.65";
+      swStatus.textContent = "";
+      panel.appendChild(swStatus);
+    }
+
+    return {
+      root,
+      videoWrap,
+      video,
+      overlay,
+      ring,
+      btnStartStop,
+      btnTorch,
+      btnWb,
+      hexEl: fHex.v,
+      rgbEl: fRgb.v,
+      hslEl: fHsl.v,
+      cssEl: fCss.v,
+      copyHex: fHex.c,
+      copyRgb: fRgb.c,
+      copyHsl: fHsl.c,
+      copyCss: fCss.c,
+      swStatus
+    };
+  }
+
+  const ui = ensureUI();
+  loadWb();
+
+  function updateWbButton() {
+    if (!wb.has) {
+      ui.btnWb.textContent = calibrateArmed ? "Weiss tippen" : "Kalibrieren";
+      ui.btnWb.title = "Kalibrieren: tippe danach auf eine weisse Flaeche";
+      return;
+    }
+    if (wb.enabled) {
+      ui.btnWb.textContent = "WB aus";
+      ui.btnWb.title = "Weissabgleich ist an. Klick: ausschalten. Option Klick: neu kalibrieren";
+    } else {
+      ui.btnWb.textContent = "WB an";
+      ui.btnWb.title = "Weissabgleich ist aus. Klick: einschalten. Option Klick: neu kalibrieren";
+    }
+  }
+
+  updateWbButton();
+
+  async function registerSW() {
+    if (!("serviceWorker" in navigator)) return;
+    try {
+      await navigator.serviceWorker.register(`${BASE_PATH}sw.js`, { scope: BASE_PATH });
+    } catch {}
+  }
+
+  async function offlineWarmup() {
+    try {
+      if (localStorage.getItem(LS_OFFLINE_READY_KEY) === "1") return;
+      if (!navigator.onLine) return;
+
+      if ("serviceWorker" in navigator) {
+        try { await navigator.serviceWorker.ready; } catch {}
+      }
+
+      await Promise.all(
+        CORE_ASSETS.map((u) => fetch(u, { cache: "reload" }).catch(() => null))
+      );
+
+      localStorage.setItem(LS_OFFLINE_READY_KEY, "1");
+      ui.swStatus.textContent = "Offline bereit";
+    } catch {
+      ui.swStatus.textContent = "";
+    }
+  }
+
+  function updateTorchButton() {
+    if (!hasTorch) {
+      ui.btnTorch.textContent = "Licht";
+      ui.btnTorch.disabled = true;
+      ui.btnTorch.style.opacity = "0.5";
+      ui.btnTorch.title = "Nicht verfuegbar";
+      return;
+    }
+    ui.btnTorch.disabled = false;
+    ui.btnTorch.style.opacity = "1";
+    ui.btnTorch.textContent = torchOn ? "Licht aus" : "Licht an";
+    ui.btnTorch.title = "";
+  }
+
+  async function startCamera() {
+    if (stream) return;
+
+    try {
+      const constraints = {
+        audio: false,
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      ui.video.srcObject = stream;
+
+      const tracks = stream.getVideoTracks();
+      videoTrack = tracks && tracks[0] ? tracks[0] : null;
+
+      hasTorch = false;
+      torchOn = false;
+
+      if (videoTrack && videoTrack.getCapabilities) {
+        const caps = videoTrack.getCapabilities();
+        if (caps && typeof caps.torch !== "undefined") {
+          hasTorch = !!caps.torch;
+        }
+      }
+
+      updateTorchButton();
+
+      ui.btnStartStop.textContent = "Kamera stoppen";
+      ui.btnStartStop.title = "";
+
+    } catch (e) {
+      stopCamera();
+      alert("Kamera Zugriff nicht moeglich. Safari Rechte pruefen.");
+    }
+  }
+
+  function stopCamera() {
+    try {
+      if (ui.video) ui.video.srcObject = null;
+      if (stream) {
+        const tracks = stream.getTracks();
+        tracks.forEach((t) => t.stop());
+      }
+    } catch {}
+    stream = null;
+    videoTrack = null;
+    hasTorch = false;
+    torchOn = false;
+    updateTorchButton();
+
+    ui.btnStartStop.textContent = "Kamera starten";
+  }
+
+  async function toggleTorch() {
+    if (!hasTorch || !videoTrack) return;
+    try {
+      torchOn = !torchOn;
+      await videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] });
+      updateTorchButton();
+    } catch {
+      torchOn = false;
+      updateTorchButton();
+    }
+  }
+
+  function showRing(clientX, clientY) {
+    const rect = ui.overlay.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    ui.ring.style.left = `${x}px`;
+    ui.ring.style.top = `${y}px`;
+    ui.ring.style.display = "block";
+    ui.ring.style.opacity = "1";
+
+    clearTimeout(showRing._t);
+    showRing._t = setTimeout(() => {
+      ui.ring.style.opacity = "0";
+      ui.ring.style.display = "none";
+    }, 220);
+  }
+
+  function sampleAt(clientX, clientY) {
+    const v = ui.video;
+    if (!v || !v.videoWidth || !v.videoHeight) return null;
+
+    const rect = ui.overlay.getBoundingClientRect();
+    const xNorm = (clientX - rect.left) / rect.width;
+    const yNorm = (clientY - rect.top) / rect.height;
+
+    const x = Math.floor(xNorm * v.videoWidth);
+    const y = Math.floor(yNorm * v.videoHeight);
+
+    if (x < 0 || y < 0 || x >= v.videoWidth || y >= v.videoHeight) return null;
+
+    const canvas = sampleAt._c || (sampleAt._c = document.createElement("canvas"));
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    canvas.width = v.videoWidth;
+    canvas.height = v.videoHeight;
+    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+
+    const pixel = ctx.getImageData(x, y, 1, 1).data;
+    return { r: pixel[0], g: pixel[1], b: pixel[2] };
+  }
+
+  function renderValues(r, g, b) {
+    const hex = rgbToHex(r, g, b);
+    const hsl = rgbToHsl(r, g, b);
+
+    const rgbText = `rgb(${r} ${g} ${b})`;
+    const hslText = `hsl(${hsl.h} ${hsl.s}% ${hsl.l}%)`;
+    const cssText = `color: ${hex}; background: ${hex};`;
+
+    ui.hexEl.textContent = hex;
+    ui.rgbEl.textContent = `${r}, ${g}, ${b}`;
+    ui.hslEl.textContent = `${hsl.h}, ${hsl.s}%, ${hsl.l}%`;
+    ui.cssEl.textContent = cssText;
+
+    ui.copyHex.onclick = () => safeCopy(hex);
+    ui.copyRgb.onclick = () => safeCopy(rgbText);
+    ui.copyHsl.onclick = () => safeCopy(hslText);
+    ui.copyCss.onclick = () => safeCopy(cssText);
+  }
+
+  ui.btnStartStop.addEventListener("click", () => {
+    if (stream) stopCamera();
+    else startCamera();
+  });
+
+  ui.btnTorch.addEventListener("click", () => {
+    toggleTorch();
+  });
+
+  ui.btnWb.addEventListener("click", (e) => {
+    const optionKey = e.altKey || e.metaKey;
+    if (optionKey) {
+      clearWb();
+      calibrateArmed = true;
+      updateWbButton();
+      return;
+    }
+
+    if (!wb.has) {
+      calibrateArmed = true;
+      updateWbButton();
+      return;
+    }
+
+    wb.enabled = !wb.enabled;
+    saveWb();
+    calibrateArmed = false;
+    updateWbButton();
+  });
+
+  ui.overlay.addEventListener("pointerdown", (ev) => {
+    if (!stream) return;
+
+    showRing(ev.clientX, ev.clientY);
+
+    const raw = sampleAt(ev.clientX, ev.clientY);
+    if (!raw) return;
+
+    if (calibrateArmed) {
+      computeWbFromWhiteSample(raw.r, raw.g, raw.b);
+      calibrateArmed = false;
+      updateWbButton();
+    }
+
+    const corrected = applyWbToRgb(raw.r, raw.g, raw.b);
+    renderValues(corrected.r, corrected.g, corrected.b);
+  });
+
+  window.addEventListener("beforeunload", () => {
+    try { stopCamera(); } catch {}
+  });
+
+  window.addEventListener("load", async () => {
+    await registerSW();
+    offlineWarmup();
+  });
+
+  renderValues(0, 0, 0);
+})();
