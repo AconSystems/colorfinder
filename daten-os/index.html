@@ -13,23 +13,28 @@
   <header class="topbar">
     <div class="brand">
       <div class="title">ColorFinder</div>
-      <div class="subtitle">live farbe finden zum helfen</div>
+      <div class="subtitle">tippe ins bild fuer farbe</div>
     </div>
   </header>
 
   <main class="wrap">
     <section class="stage">
       <div class="videoShell" id="videoShell">
-        <video id="video" playsinline autoplay muted></video>
+        <video id="video" playsinline webkit-playsinline autoplay muted></video>
         <canvas id="canvas" aria-hidden="true"></canvas>
+
+        <div id="tapHint" class="tapHint">tippe ins bild</div>
         <div id="tapRing" class="tapRing" aria-hidden="true"></div>
       </div>
 
       <div class="panel">
-        <div class="row buttons">
+        <div class="panelTop">
           <button id="btnStart" class="btn">kamera starten</button>
-          <button id="btnLight" class="btn" disabled>licht aus</button>
-          <button id="btnWB" class="btn" disabled>weissabgleich</button>
+
+          <div class="panelRight">
+            <button id="btnLight" class="btn subtle" disabled>licht aus</button>
+            <button id="btnWB" class="btn subtle" disabled>kalibrieren</button>
+          </div>
         </div>
 
         <div class="statusLineMini" id="statusText">bereit</div>
