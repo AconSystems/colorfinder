@@ -1,23 +1,23 @@
 "use strict";
 
 /*
-ColorFinder FarbFinder
-live kamera tap farbe torch weissabgleich
+ColorFinder
+live kamera tap farbe licht weissabgleich
 komplette datei ersetzen
 */
 
 const video = document.getElementById("video");
+const videoShell = document.getElementById("videoShell");
+const tapRing = document.getElementById("tapRing");
+
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
 const btnStart = document.getElementById("btnStart");
-const btnTorch = document.getElementById("btnTorch");
-const btnCalibrate = document.getElementById("btnCalibrate");
-const btnCalOff = document.getElementById("btnCalOff");
+const btnLight = document.getElementById("btnLight");
+const btnWB = document.getElementById("btnWB");
 
 const statusText = document.getElementById("statusText");
-const torchText = document.getElementById("torchText");
-const calText = document.getElementById("calText");
 
 const swatch = document.getElementById("swatch");
 const colorNameEl = document.getElementById("colorName");
@@ -33,53 +33,64 @@ const toast = document.getElementById("toast");
 let stream = null;
 let videoTrack = null;
 
-let torchSupported = false;
-let torchOn = false;
+let lightSupported = false;
+let lightOn = false;
 
-let calibrating = false;
+let wbMode = "idle"; // idle | calibrate
 
-const CAL_KEY = "colorfinder_whitebalance_v1";
+const CAL_KEY = "colorfinder_whitebalance_v2";
 let calibration = loadCalibration(); 
-// calibration format
-// { enabled: true, gainR: number, gainG: number, gainB: number, refR: number, refG: number, refB: number }
+// { enabled: boolean, gainR, gainG, gainB, refR, refG, refB }
 
 setStatus("bereit");
-
-updateCalUi();
-updateTorchUi();
+updateButtons();
 
 btnStart.addEventListener("click", async () => {
   await startCamera();
 });
 
-btnTorch.addEventListener("click", async () => {
-  await toggleTorch();
+btnLight.addEventListener("click", async () => {
+  await toggleLight();
 });
 
-btnCalibrate.addEventListener("click", () => {
+btnWB.addEventListener("click", () => {
   if (!stream) {
     setStatus("starte kamera zuerst");
     return;
   }
-  calibrating = true;
-  setStatus("kalibrierung bereit tippe auf weiss oder neutral grau");
-  toastMsg("kalibrierung modus an tippe ins bild");
-});
 
-btnCalOff.addEventListener("click", () => {
-  calibrating = false;
+  if (wbMode === "calibrate") {
+    wbMode = "idle";
+    setStatus("weissabgleich abgebrochen");
+    updateButtons();
+    return;
+  }
+
   if (calibration && calibration.enabled) {
     calibration.enabled = false;
     saveCalibration(calibration);
+    setStatus("weissabgleich aus");
+    toastMsg("weissabgleich aus");
+    updateButtons();
+    return;
   }
-  updateCalUi();
-  setStatus("kalibrierung aus");
-  toastMsg("kalibrierung aus");
+
+  wbMode = "calibrate";
+  setStatus("weissabgleich tippe auf weiss oder neutral grau");
+  toastMsg("kalibrierung bereit");
+  updateButtons();
 });
 
-video.addEventListener("click", (e) => {
+// verhindert ios text selection menue beim langen druecken
+videoShell.addEventListener("touchstart", (e) => { e.preventDefault(); }, { passive:false });
+videoShell.addEventListener("touchend", (e) => { e.preventDefault(); }, { passive:false });
+videoShell.addEventListener("contextmenu", (e) => { e.preventDefault(); });
+
+// tap messen
+videoShell.addEventListener("pointerdown", (e) => {
   if (!stream) return;
-  handleTap(e);
+  e.preventDefault();
+  handleTap(e.clientX, e.clientY);
 });
 
 document.addEventListener("click", (e) => {
@@ -95,9 +106,7 @@ document.addEventListener("click", (e) => {
 async function startCamera() {
   try {
     setStatus("kamera start");
-    if (stream) {
-      stopCamera();
-    }
+    if (stream) stopCamera();
 
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -113,93 +122,91 @@ async function startCamera() {
 
     videoTrack = stream.getVideoTracks()[0];
 
-    await detectTorchSupport();
-    updateTorchUi();
-
+    await detectLightSupport();
     setStatus("kamera bereit tippe ins bild");
     toastMsg("bereit");
+    updateButtons();
   } catch (err) {
     console.error(err);
     setStatus("kamera fehler erlaubnis pruefen");
     toastMsg("kamera fehler");
+    stopCamera();
   }
 }
 
 function stopCamera() {
   try {
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-    }
+    if (stream) stream.getTracks().forEach(t => t.stop());
   } catch (_) {}
   stream = null;
   videoTrack = null;
-  torchSupported = false;
-  torchOn = false;
-  updateTorchUi();
+  lightSupported = false;
+  lightOn = false;
+  wbMode = "idle";
+  updateButtons();
 }
 
-async function detectTorchSupport() {
-  torchSupported = false;
+async function detectLightSupport() {
+  lightSupported = false;
   if (!videoTrack) return;
 
   const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : null;
   if (caps && typeof caps.torch !== "undefined") {
-    torchSupported = true;
-    torchText.textContent = "bereit";
+    lightSupported = true;
   } else {
-    torchSupported = false;
-    torchText.textContent = "nicht verfuegbar";
+    lightSupported = false;
   }
 }
 
-async function toggleTorch() {
+async function toggleLight() {
   if (!videoTrack) {
     setStatus("starte kamera zuerst");
     return;
   }
-  if (!torchSupported) {
-    setStatus("torch nicht verfuegbar");
+  if (!lightSupported) {
+    setStatus("licht nicht verfuegbar");
     return;
   }
 
   try {
-    torchOn = !torchOn;
-    await videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] });
-    updateTorchUi();
-    setStatus(torchOn ? "licht an" : "licht aus");
+    lightOn = !lightOn;
+    await videoTrack.applyConstraints({ advanced: [{ torch: lightOn }] });
+    setStatus(lightOn ? "licht an" : "licht aus");
+    updateButtons();
   } catch (err) {
     console.error(err);
-    torchOn = false;
-    updateTorchUi();
-    setStatus("torch fehler");
+    lightOn = false;
+    setStatus("licht fehler");
+    updateButtons();
   }
 }
 
-function updateTorchUi() {
-  if (!videoTrack) {
-    btnTorch.disabled = true;
-    btnTorch.textContent = "licht aus";
-    torchText.textContent = "aus";
+function updateButtons() {
+  const running = !!stream;
+
+  btnLight.disabled = !running || !lightSupported;
+  btnWB.disabled = !running;
+
+  btnLight.textContent = lightOn ? "licht an" : "licht aus";
+
+  if (wbMode === "calibrate") {
+    btnWB.textContent = "tippe auf weiss";
     return;
   }
 
-  btnTorch.disabled = !torchSupported;
-  btnTorch.textContent = torchOn ? "licht an" : "licht aus";
-  torchText.textContent = torchSupported ? (torchOn ? "an" : "aus") : "nicht verfuegbar";
+  const wbOn = calibration && calibration.enabled;
+  btnWB.textContent = wbOn ? "weissabgleich an" : "weissabgleich";
 }
 
-function updateCalUi() {
-  const enabled = calibration && calibration.enabled;
-  calText.textContent = enabled ? "an" : "aus";
-}
-
-function handleTap(e) {
+function handleTap(clientX, clientY) {
   const rect = video.getBoundingClientRect();
 
-  const x = Math.round((e.clientX - rect.left) * (video.videoWidth / rect.width));
-  const y = Math.round((e.clientY - rect.top) * (video.videoHeight / rect.height));
+  showRing(clientX, clientY, rect);
 
   if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
+  const x = Math.round((clientX - rect.left) * (video.videoWidth / rect.width));
+  const y = Math.round((clientY - rect.top) * (video.videoHeight / rect.height));
 
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
@@ -208,12 +215,19 @@ function handleTap(e) {
   const sample = sampleAverageRgb(x, y, 10);
   if (!sample) return;
 
-  if (calibrating) {
+  if (wbMode === "calibrate") {
     applyCalibrationFromSample(sample);
-    calibrating = false;
-    updateCalUi();
-    setStatus("kalibriert tippe normal zum messen");
-    toastMsg("kalibrierung gespeichert");
+    wbMode = "idle";
+    updateButtons();
+    setStatus("weissabgleich an");
+    toastMsg("kalibriert");
+
+    // status nach 5 sekunden wieder ruhig
+    const msg = "weissabgleich an";
+    setTimeout(() => {
+      if (statusText.textContent === msg) setStatus("bereit");
+    }, 5000);
+
     return;
   }
 
@@ -221,6 +235,18 @@ function handleTap(e) {
   const rgb = applyCalibrationToRgb(rgbRaw);
 
   renderResult(rgb, rgbRaw);
+}
+
+function showRing(clientX, clientY, rect) {
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+
+  tapRing.style.left = `${x}px`;
+  tapRing.style.top = `${y}px`;
+
+  tapRing.classList.remove("show");
+  void tapRing.offsetWidth;
+  tapRing.classList.add("show");
 }
 
 function sampleAverageRgb(cx, cy, radius) {
@@ -261,16 +287,17 @@ function sampleAverageRgb(cx, cy, radius) {
 }
 
 function applyCalibrationFromSample(sample) {
-  // ziel ist neutral weiss
-  const target = 255;
+  // ziel nicht 255 sondern etwas sanfter damit es weniger ueberzieht
+  const target = 235;
 
   const refR = Math.max(1, sample.r);
   const refG = Math.max(1, sample.g);
   const refB = Math.max(1, sample.b);
 
-  const gainR = target / refR;
-  const gainG = target / refG;
-  const gainB = target / refB;
+  // gain begrenzen damit es nicht extrem wird
+  const gainR = clampNum(target / refR, 0.5, 3.0);
+  const gainG = clampNum(target / refG, 0.5, 3.0);
+  const gainB = clampNum(target / refB, 0.5, 3.0);
 
   calibration = {
     enabled: true,
@@ -283,8 +310,6 @@ function applyCalibrationFromSample(sample) {
   };
 
   saveCalibration(calibration);
-
-  calText.textContent = "an";
 }
 
 function applyCalibrationToRgb(rgb) {
@@ -302,13 +327,13 @@ function renderResult(rgb, rgbRaw) {
   const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
 
   const name = getColorName(rgb.r, rgb.g, rgb.b);
-  const extra = calibration && calibration.enabled
-    ? `korrigiert aus raw rgb ${rgbRaw.r}, ${rgbRaw.g}, ${rgbRaw.b}`
-    : `raw rgb ${rgbRaw.r}, ${rgbRaw.g}, ${rgbRaw.b}`;
+  const wbOn = calibration && calibration.enabled;
 
   swatch.style.background = hex;
   colorNameEl.textContent = name;
-  colorDescEl.textContent = extra;
+  colorDescEl.textContent = wbOn
+    ? `korrigiert aus ${rgbRaw.r}, ${rgbRaw.g}, ${rgbRaw.b}`
+    : `raw ${rgbRaw.r}, ${rgbRaw.g}, ${rgbRaw.b}`;
 
   outHex.textContent = hex;
   outRgb.textContent = `${rgb.r}, ${rgb.g}, ${rgb.b}`;
@@ -353,12 +378,15 @@ function clampInt(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+function clampNum(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
 function copyText(text) {
   if (!text) return;
   navigator.clipboard.writeText(text).then(() => {
     toastMsg("kopiert");
   }).catch(() => {
-    // fallback
     try {
       const ta = document.createElement("textarea");
       ta.value = text;
@@ -379,7 +407,7 @@ function toastMsg(msg) {
   toast.textContent = msg;
   setTimeout(() => {
     if (toast.textContent === msg) toast.textContent = "";
-  }, 1200);
+  }, 900);
 }
 
 function setStatus(msg) {
