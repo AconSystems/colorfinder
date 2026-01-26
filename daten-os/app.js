@@ -1,8 +1,8 @@
-/* app.js v9 fixed for existing index.html UI */
+/* app.js v9.1 init fix + existing index.html UI */
 (() => {
   "use strict";
 
-  const VERSION = "v9";
+  const VERSION = "v9.1";
   const BASE_PATH = "/colorfinder/daten-os/";
 
   const CORE_ASSETS = [
@@ -22,29 +22,54 @@
   const $ = (id) => document.getElementById(id);
 
   const els = {
-    videoShell: $("videoShell"),
-    video: $("video"),
-    canvas: $("canvas"),
-    tapHint: $("tapHint"),
-    tapRing: $("tapRing"),
+    videoShell: null,
+    video: null,
+    canvas: null,
+    tapHint: null,
+    tapRing: null,
 
-    btnStart: $("btnStart"),
-    btnLight: $("btnLight"),
-    btnWB: $("btnWB"),
+    btnStart: null,
+    btnLight: null,
+    btnWB: null,
 
-    statusText: $("statusText"),
+    statusText: null,
 
-    swatch: $("swatch"),
-    colorName: $("colorName"),
-    colorDesc: $("colorDesc"),
+    swatch: null,
+    colorName: null,
+    colorDesc: null,
 
-    outHex: $("outHex"),
-    outRgb: $("outRgb"),
-    outHsl: $("outHsl"),
-    outCss: $("outCss"),
+    outHex: null,
+    outRgb: null,
+    outHsl: null,
+    outCss: null,
 
-    toast: $("toast")
+    toast: null
   };
+
+  function bindEls() {
+    els.videoShell = $("videoShell");
+    els.video = $("video");
+    els.canvas = $("canvas");
+    els.tapHint = $("tapHint");
+    els.tapRing = $("tapRing");
+
+    els.btnStart = $("btnStart");
+    els.btnLight = $("btnLight");
+    els.btnWB = $("btnWB");
+
+    els.statusText = $("statusText");
+
+    els.swatch = $("swatch");
+    els.colorName = $("colorName");
+    els.colorDesc = $("colorDesc");
+
+    els.outHex = $("outHex");
+    els.outRgb = $("outRgb");
+    els.outHsl = $("outHsl");
+    els.outCss = $("outCss");
+
+    els.toast = $("toast");
+  }
 
   function assertElements() {
     const required = [
@@ -191,7 +216,6 @@
 
   function updateWBButton() {
     els.btnWB.disabled = false;
-
     if (!wb.has) {
       els.btnWB.textContent = calibrateArmed ? "weiss tippen" : "kalibrieren";
       return;
@@ -227,6 +251,11 @@
 
   async function startCamera() {
     if (stream) return;
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Dieser Browser unterstuetzt keine Kamera API.");
+      return;
+    }
 
     try {
       setStatus("kamera startet");
@@ -321,7 +350,7 @@
 
     els.swatch.style.background = hex;
     els.colorName.textContent = hex;
-    els.colorDesc.textContent = "tippe ins videobild";
+    els.colorDesc.textContent = calibrateArmed ? "weiss tippen zum kalibrieren" : "tippe ins videobild";
   }
 
   async function registerSW() {
@@ -357,4 +386,67 @@
 
     els.btnWB.addEventListener("click", () => {
       if (!wb.has) {
-        cali
+        calibrateArmed = !calibrateArmed;
+        updateWBButton();
+        setStatus(calibrateArmed ? "weiss auswaehlen" : "bereit");
+        els.colorDesc.textContent = calibrateArmed ? "weiss tippen zum kalibrieren" : "tippe ins videobild";
+        return;
+      }
+      wb.enabled = !wb.enabled;
+      saveWb();
+      calibrateArmed = false;
+      updateWBButton();
+      setStatus("bereit");
+    });
+
+    els.videoShell.addEventListener("pointerdown", (ev) => {
+      if (!stream) return;
+      showRing(ev.clientX, ev.clientY);
+
+      const raw = sampleAt(ev.clientX, ev.clientY);
+      if (!raw) return;
+
+      if (calibrateArmed) {
+        computeWbFromWhiteSample(raw.r, raw.g, raw.b);
+        calibrateArmed = false;
+        updateWBButton();
+        setStatus("wb gesetzt");
+      }
+
+      const c = applyWb(raw.r, raw.g, raw.b);
+      renderColor(c.r, c.g, c.b);
+    });
+
+    window.addEventListener("beforeunload", () => {
+      try { stopCamera(); } catch {}
+    });
+  }
+
+  function initDefaults() {
+    els.btnLight.disabled = true;
+    updateTorchButton();
+    updateWBButton();
+    renderColor(0, 0, 0);
+    setStatus("bereit");
+    wireCopyButtons();
+  }
+
+  function init() {
+    bindEls();
+    assertElements();
+    loadWb();
+    initDefaults();
+    wireEvents();
+    registerSW().then(() => offlineWarmup());
+  }
+
+  function boot() {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+      init();
+    }
+  }
+
+  boot();
+})();
