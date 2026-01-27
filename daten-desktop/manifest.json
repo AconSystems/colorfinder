@@ -1,0 +1,25 @@
+{
+  "name": "ColorFinder Desktop Referenz v01",
+  "short_name": "ColorFinder",
+  "description": "Browserbasierte Farbnamen Methode Referenz. Desktop Fokus: Fotos und Bilder. Kein Produkt. Keine Updates. Eigenverantwortung.",
+  "start_url": "/colorfinder/daten-desktop/index.html",
+  "scope": "/colorfinder/daten-desktop/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/colorfinder/daten-desktop/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/colorfinder/daten-desktop/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
