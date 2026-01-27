@@ -3,9 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="color-scheme" content="light" />
+  <meta name="color-scheme" content="dark" />
   <title>FarbFinder Desktop Referenz v01</title>
   <meta name="description" content="Browserbasierte Farbnamen Methode Referenz. Desktop Fokus: Fotos und Bilder. Kein Produkt. Keine Updates. Eigenverantwortung." />
+
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+
   <link rel="stylesheet" href="./style.css" />
 </head>
 
@@ -14,7 +19,7 @@
     <div class="top-inner">
       <div class="brand">
         <div class="brand-title">FarbFinder Desktop Referenz v01</div>
-        <div class="brand-sub">Foto und Bild Farbnamen nach fester Farbliste</div>
+        <div class="brand-sub">Foto und Bild Farbnamen nach fester Spezifikation</div>
       </div>
 
       <div class="lang">
@@ -26,16 +31,19 @@
 
   <main class="wrap">
     <section class="card">
-      <h1 id="t-headline">Bild laden und Farbe anklicken</h1>
+      <h1 id="t-headline" class="center">Bild laden und Farbe anklicken</h1>
 
       <p id="t-intro" class="muted">
-        Diese Seite ist eine technische Referenz zur Methode. Kein Softwareprodukt. Keine App im klassischen Sinn.
-        Keine Weiterentwicklung. Keine Updates. Kein Support. Nutzung auf eigene Verantwortung.
+        Diese Seite ist eine technische Referenz zur Methode. Kein Produkt. Keine Updates. Kein Support. Nutzung auf eigene Verantwortung.
+      </p>
+
+      <p class="muted">
+        Hinweis Bilder werden lokal im Browser verarbeitet ohne Upload sofern du selbst nichts hochlädst
       </p>
 
       <div class="grid">
         <div class="panel">
-          <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Datei hier ablegen oder auswählen">
+          <div id="dropzone" class="dropzone" tabindex="0" aria-label="Datei hier ablegen">
             <div class="dropzone-title" id="t-drop-title">Datei hier hineinziehen</div>
             <div class="dropzone-sub" id="t-drop-sub">oder per Button auswählen</div>
 
@@ -49,12 +57,11 @@
               </button>
             </div>
 
-            <div class="dropzone-hint" id="t-formats">Formate: jpg png webp</div>
+            <div class="dropzone-hint" id="t-formats">Formate: jpg png webp gif bmp</div>
           </div>
 
           <div class="canvas-wrap">
             <canvas id="canvas" class="canvas" width="1200" height="800" aria-label="Bildfläche"></canvas>
-
             <div class="canvas-help" id="t-canvas-help">
               Tipp: Nach dem Laden ins Bild klicken, um den Farbnamen zu erhalten.
             </div>
@@ -77,7 +84,7 @@
             </div>
 
             <div class="result-note muted" id="t-result-note">
-              Ausgabe erfolgt nach fester Farbliste. Genauigkeit hängt von Bild, Licht, Kamera, Display und Browser ab.
+              Ausgabe erfolgt nach fester Farbliste. Genauigkeit hängt von Bild, Licht, Display und Browser ab.
             </div>
           </div>
 
@@ -91,50 +98,20 @@
           </div>
 
           <div class="card-inset">
-            <div class="mini-title" id="t-scope-title">Abgrenzung</div>
-            <p class="muted" id="t-scope-text">
-              Diese Referenz ist eine Methode zur Farbnamen Orientierung. Sie ersetzt keine professionelle Farbprüfung.
-              Keine Zusagen zu Vollständigkeit, Fehlerfreiheit oder Eignung für bestimmte Zwecke.
-            </p>
-          </div>
-
-          <div class="card-inset">
-            <div class="mini-title" id="t-privacy-title">Datenschutz Hinweis</div>
-            <p class="muted" id="t-privacy-text">
-              Bilder werden lokal im Browser verarbeitet. Es findet kein Upload statt, sofern du selbst nichts hochlädst.
+            <div class="mini-title">Hinweis</div>
+            <p class="muted">
+              Die Farbnamen sind eine Zuordnung zu einer festen Liste. RGB und HEX zeigen den exakten Pixelwert.
             </p>
           </div>
         </aside>
       </div>
     </section>
-
-    <section class="card">
-      <h2 id="t-fixed-title">Feste Farbliste</h2>
-      <p class="muted" id="t-fixed-text">
-        Die Methode arbeitet mit einer festen Liste von Farbnamen und definierten Referenzfarben.
-        Die genaue Liste steht in den PDFs und in den README Dateien.
-      </p>
-
-      <div id="fixedList" class="fixed-list" aria-label="Feste Farbliste Vorschau"></div>
-    </section>
-
-    <section class="card">
-      <h2 id="t-readme-title">Dateien und Nutzung</h2>
-      <p class="muted" id="t-readme-text">
-        Diese Desktop Referenz wird als ZIP verteilt. Nach dem Entpacken index.html im Browser öffnen.
-        Details stehen in ColorFinder_README_DE.txt und ColorFinder_README_EN.txt.
-      </p>
-    </section>
   </main>
 
   <footer class="footer">
     <div class="footer-inner">
-      <div class="muted" id="t-footer-left">
-        FarbFinder ColorFinder Desktop Referenz v01
-      </div>
-      <div class="muted" id="t-footer-right">
-        Kein Produkt. Keine Updates. Eigenverantwortung.
-      </div>
+      <div class="muted" id="t-footer-left">FarbFinder ColorFinder Desktop Referenz v01</div>
+      <div class="muted" id="t-footer-right">Kein Produkt. Keine Updates. Eigenverantwortung.</div>
     </div>
   </footer>
 
