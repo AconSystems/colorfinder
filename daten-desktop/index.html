@@ -16,10 +16,10 @@
 
 <body>
   <header class="top">
-    <div class="top-inner">
-      <div class="brand">
-        <div class="brand-title">FarbFinder Desktop Referenz v01</div>
-        <div class="brand-sub">Foto und Bild Farbnamen nach fester Spezifikation</div>
+    <div class="top-inner top-inner-center">
+      <div class="brand center">
+        <div id="t-brand-title" class="brand-title">FarbFinder Desktop Referenz v01</div>
+        <div id="t-brand-sub" class="brand-sub">Foto und Bild Farbnamen nach fester Spezifikation</div>
       </div>
 
       <div class="lang">
@@ -32,14 +32,6 @@
   <main class="wrap">
     <section class="card">
       <h1 id="t-headline" class="center">Bild laden und Farbe anklicken</h1>
-
-      <p id="t-intro" class="muted">
-        Diese Seite ist eine technische Referenz zur Methode. Kein Produkt. Keine Updates. Kein Support. Nutzung auf eigene Verantwortung.
-      </p>
-
-      <p class="muted">
-        Hinweis Bilder werden lokal im Browser verarbeitet ohne Upload sofern du selbst nichts hochlädst
-      </p>
 
       <div class="grid">
         <div class="panel">
@@ -62,9 +54,6 @@
 
           <div class="canvas-wrap">
             <canvas id="canvas" class="canvas" width="1200" height="800" aria-label="Bildfläche"></canvas>
-            <div class="canvas-help" id="t-canvas-help">
-              Tipp: Nach dem Laden ins Bild klicken, um den Farbnamen zu erhalten.
-            </div>
           </div>
         </div>
 
@@ -96,22 +85,16 @@
               <li>Farbnamen wird angezeigt</li>
             </ol>
           </div>
-
-          <div class="card-inset">
-            <div class="mini-title">Hinweis</div>
-            <p class="muted">
-              Die Farbnamen sind eine Zuordnung zu einer festen Liste. RGB und HEX zeigen den exakten Pixelwert.
-            </p>
-          </div>
         </aside>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <div class="footer-inner">
+    <div class="footer-inner footer-inner-center">
       <div class="muted" id="t-footer-left">FarbFinder ColorFinder Desktop Referenz v01</div>
       <div class="muted" id="t-footer-right">Kein Produkt. Keine Updates. Eigenverantwortung.</div>
+      <div class="muted" id="t-footer-privacy">Bilder werden lokal im Browser verarbeitet. Kein Upload.</div>
     </div>
   </footer>
 
