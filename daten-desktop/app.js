@@ -32,7 +32,8 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
     rgbText: document.getElementById("rgbText"),
     hexText: document.getElementById("hexText"),
 
-    fixedList: document.getElementById("fixedList")
+    fixedList: document.getElementById("fixedList"),
+    howList: document.getElementById("t-how-list")
   };
 
   const textIds = [
@@ -120,6 +121,11 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
     }
   };
 
+  const HOW_STEPS = {
+    de: ["Bild laden oder hineinziehen", "Ins Bild klicken", "Farbnamen wird angezeigt"],
+    en: ["Load or drag an image", "Click on the image", "The color name is shown"]
+  };
+
   let currentLang = "de";
 
   // ---------- FIXE FARBLISTE HIER EINTRAGEN ----------
@@ -145,13 +151,8 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
   const ctx = els.canvas.getContext("2d", { willReadFrequently: true });
 
   let imageBitmap = null;
-  let drawInfo = {
-    // wo liegt das Bild im Canvas (wegen Klick-Koordinaten)
-    x: 0,
-    y: 0,
-    w: 0,
-    h: 0
-  };
+  let drawInfo = { x: 0, y: 0, w: 0, h: 0 };
+  let lastMatch = null;
 
   function setLang(lang) {
     currentLang = lang === "en" ? "en" : "de";
@@ -168,10 +169,22 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
     els.langDe.setAttribute("aria-pressed", isDe ? "true" : "false");
     els.langEn.setAttribute("aria-pressed", !isDe ? "true" : "false");
 
+    renderHowList();
     renderFixedList();
-    // Ergebnisname neu anzeigen, falls schon gesetzt
+
     if (lastMatch) {
       els.colorName.textContent = isDe ? lastMatch.name_de : lastMatch.name_en;
+    }
+  }
+
+  function renderHowList() {
+    if (!els.howList) return;
+    const steps = HOW_STEPS[currentLang] || HOW_STEPS.de;
+    els.howList.innerHTML = "";
+    for (const s of steps) {
+      const li = document.createElement("li");
+      li.textContent = s;
+      els.howList.appendChild(li);
     }
   }
 
@@ -203,17 +216,69 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
     return Math.sqrt(dr * dr + dg * dg + db * db);
   }
 
-  function findNearestFixedColor(rgb) {
+  function rgbToHsl(r, g, b) {
+    const rr = r / 255;
+    const gg = g / 255;
+    const bb = b / 255;
+
+    const max = Math.max(rr, gg, bb);
+    const min = Math.min(rr, gg, bb);
+    const d = max - min;
+
+    let h = 0;
+    let s = 0;
+    const l = (max + min) / 2;
+
+    if (d !== 0) {
+      s = d / (1 - Math.abs(2 * l - 1));
+      switch (max) {
+        case rr:
+          h = ((gg - bb) / d) % 6;
+          break;
+        case gg:
+          h = (bb - rr) / d + 2;
+          break;
+        default:
+          h = (rr - gg) / d + 4;
+          break;
+      }
+      h = Math.round(h * 60);
+      if (h < 0) h += 360;
+    }
+
+    return { h, s, l };
+  }
+
+  function isNeutralColor(c) {
+    const de = (c.name_de || "").toLowerCase();
+    const en = (c.name_en || "").toLowerCase();
+    return (
+      de === "schwarz" || en === "black" ||
+      de === "weiß" || en === "white" ||
+      de === "grau" || en === "gray" || en === "grey"
+    );
+  }
+
+  function findNearestFixedColor(rgb, opts) {
+    const excludeNeutrals = !!(opts && opts.excludeNeutrals);
+
     let best = null;
     let bestD = Infinity;
 
     for (const c of FIXED_COLORS) {
+      if (excludeNeutrals && isNeutralColor(c)) continue;
+
       const ref = hexToRgb(c.hex);
       const d = distanceRgb(rgb, ref);
       if (d < bestD) {
         bestD = d;
         best = c;
       }
+    }
+
+    // Wenn wir Neutrals ausgeschlossen haben und nichts finden, fallback normal
+    if (!best && excludeNeutrals) {
+      return findNearestFixedColor(rgb, { excludeNeutrals: false });
     }
 
     return { color: best, dist: bestD };
@@ -263,7 +328,6 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
   }
 
   function resizeCanvasForDisplay() {
-    // Canvas soll sich am Container orientieren, aber intern scharf bleiben
     const rect = els.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
 
@@ -286,7 +350,6 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
     const iw = bitmap.width;
     const ih = bitmap.height;
 
-    // contain scaling
     const scale = Math.min(cw / iw, ch / ih);
     const w = Math.floor(iw * scale);
     const h = Math.floor(ih * scale);
@@ -303,8 +366,6 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
   async function loadFile(file) {
     if (!file) return;
 
-    // Browser kann nicht jedes Format (zB tiff) nativ decodieren.
-    // Wir halten es bewusst simpel und stabil: was der Browser kann, geht.
     try {
       const bitmap = await createImageBitmap(file);
       imageBitmap = bitmap;
@@ -323,7 +384,6 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
   function getCanvasClickPos(evt) {
     const rect = els.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-
     const x = (evt.clientX - rect.left) * dpr;
     const y = (evt.clientY - rect.top) * dpr;
     return { x, y };
@@ -338,15 +398,9 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
     );
   }
 
-  let lastMatch = null;
-
   function pickColorAt(px, py) {
     if (!imageBitmap) return;
-
-    if (!isInsideImageArea(px, py)) {
-      // Klick außerhalb des Bildbereichs ignorieren
-      return;
-    }
+    if (!isInsideImageArea(px, py)) return;
 
     const x = clamp(Math.floor(px), 0, els.canvas.width - 1);
     const y = clamp(Math.floor(py), 0, els.canvas.height - 1);
@@ -361,7 +415,12 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
     els.hexText.textContent = hex;
     els.swatch.style.background = hex;
 
-    const nearest = findNearestFixedColor({ r, g, b });
+    // Regel gegen "alles wird schwarz" bei dunklen aber gesättigten Farben:
+    // Wenn sehr dunkel, aber noch klar farbig, dann Neutrals (weiß grau schwarz) ignorieren.
+    const hsl = rgbToHsl(r, g, b);
+    const excludeNeutrals = hsl.l < 0.22 && hsl.s > 0.25;
+
+    const nearest = findNearestFixedColor({ r, g, b }, { excludeNeutrals });
     lastMatch = nearest.color;
 
     if (nearest.color) {
@@ -372,54 +431,13 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
     }
   }
 
-  function onChooseClick() {
-    els.fileInput.click();
-  }
-
-  function onClearClick() {
-    els.fileInput.value = "";
-    clearCanvas();
-  }
-
-  function onDropzoneClick() {
-    els.fileInput.click();
-  }
-
-  function onFileInputChange() {
-    const file = els.fileInput.files && els.fileInput.files[0];
-    loadFile(file);
-  }
-
-  function onDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-    els.dropzone.classList.add("is-dragover");
-  }
-
-  function onDragLeave(e) {
-    e.preventDefault();
-    els.dropzone.classList.remove("is-dragover");
-  }
-
-  function onDrop(e) {
-    e.preventDefault();
-    els.dropzone.classList.remove("is-dragover");
-
-    const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) loadFile(file);
-  }
-
   function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
 
-    // Scope automatisch aus dem aktuellen Ordner
-    // Wichtig: sw.js muss im gleichen Ordner liegen wie index.html
     window.addEventListener("load", () => {
-      navigator.serviceWorker
-        .register("./sw.js", { scope: "./" })
-        .catch(() => {
-          // bewusst still, keine Support-Erwartung triggern
-        });
+      navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {
+        // bewusst still
+      });
     });
   }
 
@@ -427,18 +445,41 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
     els.langDe.addEventListener("click", () => setLang("de"));
     els.langEn.addEventListener("click", () => setLang("en"));
 
-    els.btnChoose.addEventListener("click", onChooseClick);
-    els.btnClear.addEventListener("click", onClearClick);
-    els.fileInput.addEventListener("change", onFileInputChange);
-
-    els.dropzone.addEventListener("click", onDropzoneClick);
-    els.dropzone.addEventListener("keydown", e => {
-      if (e.key === "Enter" || e.key === " ") onDropzoneClick();
+    // Wichtig: Buttons dürfen kein Event in die Dropzone "hochblasen"
+    els.btnChoose.addEventListener("click", e => {
+      e.stopPropagation();
+      els.fileInput.click();
     });
 
-    els.dropzone.addEventListener("dragover", onDragOver);
-    els.dropzone.addEventListener("dragleave", onDragLeave);
-    els.dropzone.addEventListener("drop", onDrop);
+    els.btnClear.addEventListener("click", e => {
+      e.stopPropagation();
+      els.fileInput.value = "";
+      clearCanvas();
+    });
+
+    els.fileInput.addEventListener("change", () => {
+      const file = els.fileInput.files && els.fileInput.files[0];
+      loadFile(file);
+    });
+
+    // Dropzone ist nur Drag Drop, kein Klick
+    els.dropzone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      els.dropzone.classList.add("is-dragover");
+    });
+
+    els.dropzone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      els.dropzone.classList.remove("is-dragover");
+    });
+
+    els.dropzone.addEventListener("drop", e => {
+      e.preventDefault();
+      els.dropzone.classList.remove("is-dragover");
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) loadFile(file);
+    });
 
     els.canvas.addEventListener("click", e => {
       const pos = getCanvasClickPos(e);
@@ -451,8 +492,6 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
   }
 
   function initCanvasSizing() {
-    // Wenn CSS die Canvas Größe steuert, müssen wir sie intern passend setzen.
-    // Falls CSS noch nicht geladen ist, resize nach einem Tick.
     setTimeout(() => {
       resizeCanvasForDisplay();
     }, 0);
@@ -460,6 +499,7 @@ Unten ist eine klare Stelle markiert, wo ihr eure finale Farbliste eintragt.
 
   function init() {
     setLang("de");
+    renderHowList();
     renderFixedList();
     resetResult();
     initEvents();
