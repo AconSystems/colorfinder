@@ -1,11 +1,7 @@
 /*
 ColorFinder / FarbFinder Desktop Referenz v01
 style.css
-
-Ziel
-Ruhiges dunkles Layout wie Handy Referenz
-Gute Lesbarkeit
-Keine Spielereien
+Dunkles ruhiges Layout wie Handy Referenz
 */
 
 * {
@@ -39,6 +35,16 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.top-inner-center {
+  justify-content: center;
+  position: relative;
+}
+
+.top-inner-center .lang {
+  position: absolute;
+  right: 16px;
 }
 
 .brand-title {
@@ -180,12 +186,6 @@ a {
   display: block;
 }
 
-.canvas-help {
-  font-size: 12px;
-  color: #bdbdbd;
-  margin-top: 6px;
-}
-
 .result-row {
   display: flex;
   gap: 12px;
@@ -228,4 +228,9 @@ a {
   gap: 12px;
   font-size: 12px;
   flex-wrap: wrap;
+}
+
+.footer-inner-center {
+  justify-content: center;
+  text-align: center;
 }
