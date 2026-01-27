@@ -4,7 +4,7 @@
 ColorFinder / FarbFinder Desktop Referenz v01
 app.js
 
-Vollversion mit CSV Palette + EN Mapping (Variante A)
+Vollversion mit CSV Palette + Familien Gate + DE/EN
 
 Enthält
 - DE/EN Umschaltung UI
@@ -13,9 +13,9 @@ Enthält
 - Klick ins Bild -> RGB/HEX -> Farbnamen
 - Service Worker Registrierung
 - Matching gegen große Palette aus CSV 1
-- Familie bleibt stabil (A): erst Familie, dann Matching innerhalb Familie
+- Familien Gate für alle Grundfarben
+- Sonderlogik: Beige, Braun, Gold, Silber
 - Filter raus: kupfer aluminium olive oliv (auch zusammengesetzte Namen)
-- Gold Silber bleiben
 - Ergebnis Hinweis ausblenden
 - How it works ausblenden
 */
@@ -262,226 +262,124 @@ Enthält
     return dr * dr + dg * dg + db * db;
   }
 
-  function familyOfHsl(h, s, l) {
-    if (l <= 0.06) return "neutral";
-    if (s <= 0.10) return "neutral";
-
-    if (h >= 345 || h <= 15) return "red";
-    if (h >= 16 && h <= 40) return "orange";
-    if (h >= 41 && h <= 70) return "yellow";
-    if (h >= 71 && h <= 165) return "green";
-    if (h >= 166 && h <= 205) return "cyan";
-    if (h >= 206 && h <= 255) return "blue";
-    if (h >= 256 && h <= 299) return "violet";
-    if (h >= 300 && h <= 344) return "magenta";
-    return "other";
-  }
-
-  // EN Mapping (Variante A, kontrolliert)
-  // Hinweis: Wo englische Begriffe unüblich wären, nutzen wir eine saubere, verständliche Übersetzung.
-  // Wenn ein Name fehlt, fällt es auf den deutschen Namen zurück (sollte aber nicht passieren).
-  const EN_MAP = {
-    "Grünbeige": "Green Beige",
-    "Beige": "Beige",
-    "Sandgelb": "Sand Yellow",
-    "Signalgelb": "Signal Yellow",
-    "Goldgelb": "Golden Yellow",
-    "Honiggelb": "Honey Yellow",
-    "Maisgelb": "Maize Yellow",
-    "Narzissengelb": "Daffodil Yellow",
-    "Braungelb": "Brown Yellow",
-    "Zitronengelb": "Lemon Yellow",
-    "Perlweiß": "Pearl White",
+  // Kontrollierte EN Übersetzung (Variante A)
+  // 1) harte Ausnahmen
+  // 2) definierte Wortbausteine (keine freie Fantasie)
+  const EN_EXACT = {
     "Elfenbein": "Ivory",
     "Hellelfenbein": "Light Ivory",
-    "Schwefelgelb": "Sulfur Yellow",
-    "Safrangelb": "Saffron Yellow",
-    "Zinkgelb": "Zinc Yellow",
-    "Graubeige": "Grey Beige",
-    "Olivgelb": "Olive Yellow",
-    "Rapsgelb": "Rapeseed Yellow",
-    "Verkehrsgelb": "Traffic Yellow",
-    "Gelborange": "Yellow Orange",
-    "Rotorange": "Red Orange",
-    "Blutorange": "Blood Orange",
-    "Pastellorange": "Pastel Orange",
-    "Reinorange": "Pure Orange",
-    "Leuchtorange": "Fluorescent Orange",
-    "Leuchthellorange": "Fluorescent Light Orange",
-    "Hellrotorange": "Light Red Orange",
-    "Verkehrsorange": "Traffic Orange",
-    "Signalorange": "Signal Orange",
-    "Tieforange": "Deep Orange",
-    "Lachsorange": "Salmon Orange",
-    "Perlorange": "Pearl Orange",
-    "Feuerrot": "Flame Red",
-    "Signalrot": "Signal Red",
-    "Karminrot": "Carmine Red",
-    "Rubinrot": "Ruby Red",
-    "Purpurrot": "Purple Red",
-    "Weinrot": "Wine Red",
-    "Schwarzrot": "Black Red",
-    "Oxidrot": "Oxide Red",
-    "Braunrot": "Brown Red",
-    "Beigerot": "Beige Red",
-    "Tomatenrot": "Tomato Red",
-    "Altrosa": "Old Rose",
-    "Hellrosa": "Light Pink",
-    "Korallenrot": "Coral Red",
-    "Rose": "Rose",
-    "Erdbeerrot": "Strawberry Red",
-    "Verkehrsrot": "Traffic Red",
-    "Lachsrot": "Salmon Red",
-    "Leuchtrot": "Fluorescent Red",
-    "Leuchthellrot": "Fluorescent Bright Red",
-    "Himbeerrot": "Raspberry Red",
-    "Reinrot": "Pure Red",
-    "Perlrot": "Pearl Red",
-    "Orientrot": "Orient Red",
-    "Perlrubinrot": "Pearl Ruby Red",
-    "Rotlila": "Red Lilac",
-    "Rotviolett": "Red Violet",
-    "Erikaviolett": "Heather Violet",
-    "Bordeauxviolett": "Bordeaux Violet",
-    "Blaulila": "Blue Lilac",
-    "Verkehrspurpur": "Traffic Purple",
-    "Purpurviolett": "Purple Violet",
-    "Signalviolett": "Signal Violet",
-    "Pastellviolett": "Pastel Violet",
-    "Telemagenta": "Telemagenta",
-    "Perlviolett": "Pearl Violet",
-    "Perlbrombeer": "Pearl Blackberry",
-    "Violettblau": "Violet Blue",
-    "Grünblau": "Green Blue",
-    "Ultramarinblau": "Ultramarine Blue",
-    "Saphirblau": "Sapphire Blue",
-    "Schwarzblau": "Black Blue",
-    "Signalblau": "Signal Blue",
-    "Brillantblau": "Brilliant Blue",
-    "Graublau": "Grey Blue",
-    "Azurblau": "Azure Blue",
-    "Enzianblau": "Gentian Blue",
-    "Stahlblau": "Steel Blue",
-    "Lichtblau": "Light Blue",
-    "Kobaltblau": "Cobalt Blue",
-    "Taubenblau": "Pigeon Blue",
-    "Himmelblau": "Sky Blue",
-    "Verkehrsblau": "Traffic Blue",
-    "Türkisblau": "Turquoise Blue",
-    "Capriblau": "Capri Blue",
-    "Ozeanblau": "Ocean Blue",
-    "Wasserblau": "Water Blue",
-    "Nachtblau": "Night Blue",
-    "Fernblau": "Distant Blue",
-    "Pastellblau": "Pastel Blue",
-    "Perlenzian": "Pearl Gentian",
-    "Perlnachtblau": "Pearl Night Blue",
-    "Patinagrün": "Patina Green",
-    "Smaragdgrün": "Emerald Green",
-    "Laubgrün": "Foliage Green",
-    "Blaugrün": "Blue Green",
-    "Moosgrün": "Moss Green",
-    "Graugrün": "Grey Green",
-    "Flaschengrün": "Bottle Green",
-    "Braungrün": "Brown Green",
-    "Tannengrün": "Fir Green",
-    "Grasgrün": "Grass Green",
-    "Resedagrün": "Reseda Green",
-    "Schwarzgrün": "Black Green",
-    "Schilfgrün": "Reed Green",
-    "Gelboliv": "Yellow Olive",
-    "Schwarzoliv": "Black Olive",
-    "Türkisgrün": "Turquoise Green",
-    "Maigrün": "May Green",
-    "Gelbgrün": "Yellow Green",
-    "Weißgrün": "White Green",
-    "Chromoxidgrün": "Chromium Oxide Green",
-    "Blassgrün": "Pale Green",
-    "Verkehrsgrün": "Traffic Green",
-    "Farngrün": "Fern Green",
-    "Opalgrün": "Opal Green",
-    "Lichtgrün": "Light Green",
-    "Kieferngrün": "Pine Green",
-    "Minzgrün": "Mint Green",
-    "Signalgrün": "Signal Green",
-    "Minttürkis": "Mint Turquoise",
-    "Pastelltürkis": "Pastel Turquoise",
-    "Perlgrün": "Pearl Green",
-    "Perlopalgrün": "Pearl Opal Green",
-    "Reingrün": "Pure Green",
-    "Leuchtgrün": "Fluorescent Green",
-    "Fehgrau": "Squirrel Grey",
-    "Silbergrau": "Silver Grey",
-    "Olivgrau": "Olive Grey",
-    "Moosgrau": "Moss Grey",
-    "Signalgrau": "Signal Grey",
-    "Mausgrau": "Mouse Grey",
-    "Beigegrau": "Beige Grey",
-    "Khakigrau": "Khaki Grey",
-    "Grüngrau": "Green Grey",
-    "Zeltgrau": "Tent Grey",
-    "Eisengrau": "Iron Grey",
-    "Basaltgrau": "Basalt Grey",
-    "Braungrau": "Brown Grey",
-    "Schiefergrau": "Slate Grey",
-    "Anthrazitgrau": "Anthracite Grey",
-    "Schwarzgrau": "Black Grey",
-    "Umbragrau": "Umber Grey",
-    "Betongrau": "Concrete Grey",
-    "Graphitgrau": "Graphite Grey",
-    "Granitegrau": "Granite Grey",
-    "Steingrau": "Stone Grey",
-    "Blaugrau": "Blue Grey",
-    "Kieselgrau": "Pebble Grey",
-    "Zementgrau": "Cement Grey",
-    "Gelbgrau": "Yellow Grey",
-    "Lichtgrau": "Light Grey",
-    "Platingrau": "Platinum Grey",
-    "Staubgrau": "Dust Grey",
-    "Achatgrau": "Agate Grey",
-    "Quarzgrau": "Quartz Grey",
-    "Fenstergrau": "Window Grey",
-    "Verkehrsgrau A": "Traffic Grey A",
-    "Verkehrsgrau B": "Traffic Grey B",
-    "Seidengrau": "Silk Grey",
-    "Telegrau 1": "Tele Grey 1",
-    "Telegrau 2": "Tele Grey 2",
-    "Telegrau 4": "Tele Grey 4",
-    "Perlmausgrau": "Pearl Mouse Grey",
-    "Grünbraun": "Green Brown",
-    "Ockerbraun": "Ochre Brown",
-    "Signalbraun": "Signal Brown",
-    "Lehmbraun": "Clay Brown",
-    "Rehbraun": "Deer Brown",
-    "Nussbraun": "Nut Brown",
-    "Rotbraun": "Red Brown",
-    "Sepiabraun": "Sepia Brown",
-    "Kastanienbraun": "Chestnut Brown",
-    "Mahagonibraun": "Mahogany Brown",
-    "Schokoladenbraun": "Chocolate Brown",
-    "Graubraun": "Grey Brown",
-    "Schwarzbraun": "Black Brown",
-    "Beigebraun": "Beige Brown",
-    "Terrabraun": "Terra Brown",
     "Cremeweiß": "Cream White",
     "Grauweiß": "Grey White",
-    "Signalweiß": "Signal White",
-    "Signalschwarz": "Signal Black",
-    "Tiefschwarz": "Deep Black",
     "Reinweiß": "Pure White",
-    "Graphitschwarz": "Graphite Black",
+    "Tiefschwarz": "Deep Black",
+    "Signalschwarz": "Signal Black",
+    "Signalweiß": "Signal White",
     "Verkehrsweiß": "Traffic White",
     "Verkehrsschwarz": "Traffic Black",
     "Papyrusweiß": "Papyrus White",
-    "Perldunkelgrau": "Pearl Dark Grey"
+    "Perlweiß": "Pearl White",
+    "Silbergrau": "Silver Grey",
+    "Anthrazitgrau": "Anthracite Grey",
+    "Graphitgrau": "Graphite Grey",
+    "Graphitschwarz": "Graphite Black"
   };
 
-  function toEnName(deName) {
-    return EN_MAP[deName] || deName;
+  const EN_PARTS = [
+    ["Verkehrs", "Traffic "],
+    ["Signal", "Signal "],
+    ["Perl", "Pearl "],
+    ["Leucht", "Fluorescent "],
+    ["Hell", "Light "],
+    ["Dunkel", "Dark "]
+  ];
+
+  const EN_SUFFIX = [
+    ["weiß", "White"],
+    ["schwarz", "Black"],
+    ["grau", "Grey"],
+    ["blau", "Blue"],
+    ["grün", "Green"],
+    ["rot", "Red"],
+    ["gelb", "Yellow"],
+    ["orange", "Orange"],
+    ["violett", "Violet"],
+    ["purpur", "Purple"],
+    ["magenta", "Magenta"],
+    ["braun", "Brown"]
+  ];
+
+  function capitalizeWords(s) {
+    return s
+      .split(" ")
+      .filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
   }
 
-  // CSV Palette als String
-  // Kopfzeile: Farbname,Hexcode,RGB
+  function toEnName(deName) {
+    if (!deName) return deName;
+
+    if (EN_EXACT[deName]) return EN_EXACT[deName];
+
+    let s = deName;
+
+    // erst bekannte Präfixe auseinanderziehen
+    for (const [de, en] of EN_PARTS) {
+      if (s.startsWith(de)) {
+        s = s.replace(de, en);
+        break;
+      }
+    }
+
+    // typische Komposita in Wortgrenzen bringen
+    // Beispiel: "Beigebraun" -> "Beige braun" (danach Suffix Mapping)
+    s = s.replace(/([a-zäöü])([A-ZÄÖÜ])/g, "$1 $2");
+
+    // Suffix Mapping am Wortende oder als letztes Wort
+    // wir arbeiten auf lower-case zur Erkennung, behalten aber danach Capitalize
+    const parts = s.split(" ").filter(Boolean);
+
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      const lower = p.toLowerCase();
+
+      let replaced = p;
+      for (const [deSuf, enSuf] of EN_SUFFIX) {
+        if (lower.endsWith(deSuf)) {
+          // Spezial: wenn Wort genau "Beige" ist, lassen wir es
+          if (lower === "beige") {
+            replaced = "Beige";
+            break;
+          }
+          const stem = p.slice(0, p.length - deSuf.length);
+          // Falls Stem leer: direkt das englische Wort
+          replaced = (stem ? stem : "") + enSuf;
+          break;
+        }
+      }
+      parts[i] = replaced;
+    }
+
+    let out = parts.join(" ");
+
+    // ein paar weitere kontrollierte Begriffe
+    out = out.replace(/\bLachs\b/gi, "Salmon");
+    out = out.replace(/\bTomaten\b/gi, "Tomato");
+    out = out.replace(/\bWein\b/gi, "Wine");
+    out = out.replace(/\bRose\b/gi, "Rose");
+    out = out.replace(/\bApricot\b/gi, "Apricot");
+    out = out.replace(/\bPfirsich\b/gi, "Peach");
+    out = out.replace(/\bNuss\b/gi, "Nut");
+    out = out.replace(/\bMaus\b/gi, "Mouse");
+    out = out.replace(/\bZement\b/gi, "Cement");
+    out = out.replace(/\bBeton\b/gi, "Concrete");
+    out = out.replace(/\bFenster\b/gi, "Window");
+    out = out.replace(/\bStein\b/gi, "Stone");
+
+    return capitalizeWords(out.trim());
+  }
+
+  // CSV Palette
   const CSV_PALETTE = `
 Farbname,Hexcode,RGB
 Grünbeige,#CCC58F,204 197 143
@@ -688,12 +586,69 @@ Perldunkelgrau,#828282,130 130 130
 `.trim();
 
   // Filter Tokens: alles mit diesen Substrings fliegt raus
-  // Achtung: Das entfernt auch Olivgrün, Olivgrau usw (so gewünscht)
   const bannedTokens = ["kupfer", "aluminium", "olive", "oliv"];
+
+  function measuredFamily(h, s, l) {
+    // Sonderfälle zuerst
+    // Silber sehr streng
+    if (s <= 0.10 && l >= 0.62 && h >= 180 && h <= 260) return "silver";
+    // Gold streng
+    if (h >= 40 && h <= 62 && s >= 0.30 && l >= 0.30 && l <= 0.72) return "gold";
+    // Beige Gruppe priorisiert
+    if (h >= 28 && h <= 70 && s < 0.28 && l >= 0.33 && l <= 0.85) return "beige";
+    // Neutral
+    if (l <= 0.06) return "neutral";
+    if (s <= 0.10) return "neutral";
+    // Braun Kandidat
+    if (h >= 10 && h <= 70 && s < 0.30 && l < 0.55 && l > 0.10) return "brown";
+    // Grundfarben
+    if (h >= 345 || h <= 15) return "red";
+    if (h >= 16 && h <= 40) return "orange";
+    if (h >= 41 && h <= 70) return "yellow";
+    if (h >= 71 && h <= 165) return "green";
+    if (h >= 166 && h <= 205) return "cyan";
+    if (h >= 206 && h <= 255) return "blue";
+    if (h >= 256 && h <= 299) return "violet";
+    if (h >= 300 && h <= 344) return "magenta";
+    return "other";
+  }
+
+  function entryFamily(name, h, s, l) {
+    const lower = (name || "").toLowerCase();
+
+    // Namens-basierte Sonderfamilien
+    if (lower.indexOf("silber") !== -1) return "silver";
+    if (lower.indexOf("gold") !== -1) return "gold";
+
+    // Weiß Töne als beige bzw neutral
+    if (lower.indexOf("elfenbein") !== -1) return "beige";
+    if (lower.indexOf("beige") !== -1) return "beige";
+    if (lower.indexOf("creme") !== -1) return "beige";
+    if (lower.indexOf("papyrus") !== -1) return "beige";
+
+    // Neutral über S
+    if (l <= 0.06) return "neutral";
+    if (s <= 0.10) return "neutral";
+
+    // Braun Kandidat
+    if (h >= 10 && h <= 70 && s < 0.30 && l < 0.55 && l > 0.10) return "brown";
+
+    // Hue Familien
+    if (h >= 345 || h <= 15) return "red";
+    if (h >= 16 && h <= 40) return "orange";
+    if (h >= 41 && h <= 70) return "yellow";
+    if (h >= 71 && h <= 165) return "green";
+    if (h >= 166 && h <= 205) return "cyan";
+    if (h >= 206 && h <= 255) return "blue";
+    if (h >= 256 && h <= 299) return "violet";
+    if (h >= 300 && h <= 344) return "magenta";
+    return "other";
+  }
 
   function parsePalette(csvText) {
     const lines = csvText.split(/\r?\n/);
     const out = [];
+
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
@@ -706,6 +661,8 @@ Perldunkelgrau,#828282,130 130 130
       const rgbStr = (parts[2] || "").trim();
 
       const nLower = name.toLowerCase();
+
+      // Filter raus
       let banned = false;
       for (const t of bannedTokens) {
         if (nLower.indexOf(t) !== -1) {
@@ -713,8 +670,7 @@ Perldunkelgrau,#828282,130 130 130
           break;
         }
       }
-
-      // Gold und Silber bleiben immer erlaubt (falls sie irgendwann in CSV auftauchen)
+      // Gold Silber bleiben erlaubt
       if (banned && nLower.indexOf("gold") === -1 && nLower.indexOf("silber") === -1) {
         continue;
       }
@@ -729,36 +685,22 @@ Perldunkelgrau,#828282,130 130 130
       if (![r, g, b].every(v => Number.isFinite(v))) continue;
 
       const hsl = rgbToHsl(r, g, b);
-      const fam = familyOfHsl(hsl.h, hsl.s, hsl.l);
+      const fam = entryFamily(name, hsl.h, hsl.s, hsl.l);
 
       out.push({ name, hex, r, g, b, fam });
     }
+
     return out;
   }
 
   const palette = parsePalette(CSV_PALETTE);
 
-  // Fallback Mini Palette (CSV 2), nur wenn Family-Kandidaten extrem wenig sind
-  // Diese Namen werden ebenfalls EN übersetzt
-  const MINI = [
-    { de: "Schwarz", en: "Black", r: 0, g: 0, b: 0 },
-    { de: "Weiß", en: "White", r: 255, g: 255, b: 255 },
-    { de: "Grau", en: "Gray", r: 128, g: 128, b: 128 },
-    { de: "Rot", en: "Red", r: 255, g: 0, b: 0 },
-    { de: "Grün", en: "Green", r: 0, g: 255, b: 0 },
-    { de: "Blau", en: "Blue", r: 0, g: 0, b: 255 },
-    { de: "Gelb", en: "Yellow", r: 255, g: 255, b: 0 },
-    { de: "Orange", en: "Orange", r: 255, g: 165, b: 0 },
-    { de: "Violett", en: "Violet", r: 128, g: 0, b: 128 },
-    { de: "Cyan", en: "Cyan", r: 0, g: 255, b: 255 },
-    { de: "Magenta", en: "Magenta", r: 255, g: 0, b: 255 },
-    { de: "Braun", en: "Brown", r: 139, g: 69, b: 19 },
-    { de: "Gold", en: "Gold", r: 212, g: 175, b: 55 },
-    { de: "Silber", en: "Silver", r: 192, g: 192, b: 192 }
-  ].map(p => {
-    const hsl = rgbToHsl(p.r, p.g, p.b);
-    return { name: p.de, en: p.en, r: p.r, g: p.g, b: p.b, fam: familyOfHsl(hsl.h, hsl.s, hsl.l), isMini: true };
-  });
+  // Kandidaten pro Familie vorbereiten
+  const byFam = {};
+  for (const p of palette) {
+    if (!byFam[p.fam]) byFam[p.fam] = [];
+    byFam[p.fam].push(p);
+  }
 
   function bestFromList(r, g, b, list) {
     let best = null;
@@ -773,37 +715,47 @@ Perldunkelgrau,#828282,130 130 130
     return best;
   }
 
-  function nearestNameStableFamily(r, g, b) {
+  function nearestNameWithFamilyGate(r, g, b) {
     const hsl = rgbToHsl(r, g, b);
-    const fam = familyOfHsl(hsl.h, hsl.s, hsl.l);
+    const fam = measuredFamily(hsl.h, hsl.s, hsl.l);
 
-    const famCandidates = palette.filter(p => p.fam === fam);
+    const candidates = byFam[fam] || [];
 
-    // Wenn eine Familie zu klein ist, erweitern wir minimal mit Mini-Farben derselben Familie,
-    // statt sofort quer durch alle Familien zu springen.
-    const miniCandidates = MINI.filter(p => p.fam === fam);
+    // Fallback Reihenfolge, falls eine Familie mal leer ist
+    const fallbackOrder = {
+      beige: ["beige", "yellow", "neutral", "brown"],
+      gold: ["gold", "yellow", "beige"],
+      silver: ["silver", "neutral"],
+      brown: ["brown", "orange", "yellow"],
+      orange: ["orange", "brown", "red", "yellow"],
+      yellow: ["yellow", "beige", "orange"],
+      red: ["red", "orange", "brown"],
+      green: ["green", "cyan"],
+      cyan: ["cyan", "blue", "green"],
+      blue: ["blue", "cyan", "violet"],
+      violet: ["violet", "magenta", "blue"],
+      magenta: ["magenta", "violet", "red"],
+      neutral: ["neutral", "silver", "beige"],
+      other: ["neutral", "beige"]
+    };
 
-    const combined = famCandidates.concat(miniCandidates);
-
-    let best = null;
-
-    if (combined.length >= 8) {
-      best = bestFromList(r, g, b, combined);
-    } else if (famCandidates.length > 0) {
-      best = bestFromList(r, g, b, famCandidates);
-    } else {
-      // letzte Absicherung: neutrales Fallback über Mini
-      best = bestFromList(r, g, b, MINI);
+    let list = candidates;
+    if (!list || list.length < 6) {
+      const ord = fallbackOrder[fam] || ["neutral", "beige"];
+      const merged = [];
+      for (const f of ord) {
+        const arr = byFam[f];
+        if (arr && arr.length) merged.push.apply(merged, arr);
+      }
+      list = merged.length ? merged : palette;
     }
 
-    if (!best) {
-      return { de: "Grau", en: "Gray" };
-    }
+    const best = bestFromList(r, g, b, list);
 
-    const deName = best.name;
-    const enName = best.isMini ? (best.en || toEnName(deName)) : toEnName(deName);
+    const deName = best ? best.name : "Grau";
+    const enName = toEnName(deName);
 
-    return { de: deName, en: enName };
+    return { de: deName, en: enName, fam: fam };
   }
 
   function pickColorAt(px, py) {
@@ -824,7 +776,7 @@ Perldunkelgrau,#828282,130 130 130
     els.hexText.textContent = hex;
     els.swatch.style.background = hex;
 
-    const name = nearestNameStableFamily(r, g, b);
+    const name = nearestNameWithFamilyGate(r, g, b);
 
     lastNameDe = name.de;
     lastNameEn = name.en;
