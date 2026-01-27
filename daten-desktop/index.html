@@ -52,6 +52,16 @@
             <div class="dropzone-hint" id="t-formats">Formate: jpg png webp gif bmp</div>
           </div>
 
+          <div class="canvas-toolbar">
+            <button id="btnZoomOut" type="button" class="btn btn-ghost" aria-label="Zoom verkleinern">Zoom -</button>
+            <button id="btnZoomIn" type="button" class="btn btn-ghost" aria-label="Zoom vergrößern">Zoom +</button>
+            <button id="btnZoomReset" type="button" class="btn btn-ghost" aria-label="Zoom zurücksetzen">1:1</button>
+            <div class="zoom-readout" aria-label="Zoom Anzeige">
+              <span class="muted">Zoom</span>
+              <span id="zoomValue">100%</span>
+            </div>
+          </div>
+
           <div class="canvas-wrap">
             <canvas id="canvas" class="canvas" width="1200" height="800" aria-label="Bildfläche"></canvas>
           </div>
