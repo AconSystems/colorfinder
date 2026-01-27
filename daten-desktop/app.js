@@ -10,16 +10,15 @@ Funktionen
 3 Bild auf Canvas zeichnen
 4 Klick ins Bild -> Pixel lesen -> RGB HEX -> nächster Farbname aus fixer Referenzliste
 5 DE EN Umschaltung
-
-Hinweis
-Farbnamen sind eine Zuordnung zu einer festen Referenzliste.
-RGB und HEX sind der exakte Pixelwert.
 */
 
 (function () {
   const els = {
     langDe: document.getElementById("lang-de"),
     langEn: document.getElementById("lang-en"),
+
+    brandTitle: document.getElementById("t-brand-title"),
+    brandSub: document.getElementById("t-brand-sub"),
 
     dropzone: document.getElementById("dropzone"),
     fileInput: document.getElementById("fileInput"),
@@ -32,18 +31,18 @@ RGB und HEX sind der exakte Pixelwert.
     rgbText: document.getElementById("rgbText"),
     hexText: document.getElementById("hexText"),
 
-    howList: document.getElementById("t-how-list")
+    howList: document.getElementById("t-how-list"),
+
+    footerPrivacy: document.getElementById("t-footer-privacy")
   };
 
   const textIds = [
     "t-headline",
-    "t-intro",
     "t-drop-title",
     "t-drop-sub",
     "t-choose",
     "t-clear",
     "t-formats",
-    "t-canvas-help",
     "t-result-title",
     "t-result-note",
     "t-how-title",
@@ -53,38 +52,40 @@ RGB und HEX sind der exakte Pixelwert.
 
   const I18N = {
     de: {
+      brand_title: "FarbFinder Desktop Referenz v01",
+      brand_sub: "Foto und Bild Farbnamen nach fester Spezifikation",
+
       "t-headline": "Bild laden und Farbe anklicken",
-      "t-intro":
-        "Diese Seite ist eine technische Referenz zur Methode. Kein Produkt. Keine Updates. Kein Support. Nutzung auf eigene Verantwortung.",
       "t-drop-title": "Datei hier hineinziehen",
       "t-drop-sub": "oder per Button auswählen",
       "t-choose": "Bild auswählen",
       "t-clear": "Zurücksetzen",
       "t-formats": "Formate: jpg png webp gif bmp",
-      "t-canvas-help": "Tipp: Nach dem Laden ins Bild klicken, um den Farbnamen zu erhalten.",
       "t-result-title": "Ergebnis",
       "t-result-note":
         "Ausgabe erfolgt nach fester Farbliste. Genauigkeit hängt von Bild, Licht, Display und Browser ab.",
       "t-how-title": "So funktioniert es",
       "t-footer-left": "FarbFinder ColorFinder Desktop Referenz v01",
-      "t-footer-right": "Kein Produkt. Keine Updates. Eigenverantwortung."
+      "t-footer-right": "Kein Produkt. Keine Updates. Eigenverantwortung.",
+      footer_privacy: "Bilder werden lokal im Browser verarbeitet. Kein Upload."
     },
     en: {
+      brand_title: "ColorFinder Desktop Reference v01",
+      brand_sub: "Photo and image color names by fixed specification",
+
       "t-headline": "Load an image and click a color",
-      "t-intro":
-        "This page is a technical reference for the method. Not a product. No updates. No support. Use at your own responsibility.",
       "t-drop-title": "Drag and drop an image here",
       "t-drop-sub": "or choose a file",
       "t-choose": "Choose image",
       "t-clear": "Reset",
       "t-formats": "Formats: jpg png webp gif bmp",
-      "t-canvas-help": "Tip: After loading, click on the image to get the color name.",
       "t-result-title": "Result",
       "t-result-note":
         "Output follows a fixed color list. Accuracy depends on image, light, display and browser.",
       "t-how-title": "How it works",
       "t-footer-left": "FarbFinder ColorFinder Desktop Reference v01",
-      "t-footer-right": "Not a product. No updates. Own responsibility."
+      "t-footer-right": "Not a product. No updates. Own responsibility.",
+      footer_privacy: "Images are processed locally in the browser. No upload."
     }
   };
 
@@ -95,10 +96,7 @@ RGB und HEX sind der exakte Pixelwert.
 
   let currentLang = "de";
 
-  // Fixe Referenzliste DE EN HEX
-  // Fototauglich erweitert
   const FIXED_COLORS = [
-    // Neutrale Farben
     { name_de: "Schwarz", name_en: "Black", hex: "#000000" },
     { name_de: "Anthrazit", name_en: "Anthracite", hex: "#1E1E1E" },
     { name_de: "Dunkelgrau", name_en: "Dark Gray", hex: "#3A3A3A" },
@@ -106,7 +104,6 @@ RGB und HEX sind der exakte Pixelwert.
     { name_de: "Hellgrau", name_en: "Light Gray", hex: "#CFCFCF" },
     { name_de: "Silbergrau", name_en: "Silver Gray", hex: "#BFC3C7" },
 
-    // Weißtöne
     { name_de: "Reinweiß", name_en: "Pure White", hex: "#FFFFFF" },
     { name_de: "Weiß", name_en: "White", hex: "#F7F7F7" },
     { name_de: "Gebrochenes Weiß", name_en: "Off White", hex: "#F2F0E6" },
@@ -116,7 +113,6 @@ RGB und HEX sind der exakte Pixelwert.
     { name_de: "Kaltweiß", name_en: "Cool White", hex: "#F4FBFF" },
     { name_de: "Titanweiß", name_en: "Titanium White", hex: "#F8F9FF" },
 
-    // Metallfarben
     { name_de: "Silber", name_en: "Silver", hex: "#C0C0C0" },
     { name_de: "Aluminium", name_en: "Aluminum", hex: "#D6D6D6" },
     { name_de: "Titan", name_en: "Titanium", hex: "#A7A9AC" },
@@ -129,7 +125,6 @@ RGB und HEX sind der exakte Pixelwert.
     { name_de: "Kupfer", name_en: "Copper", hex: "#B87333" },
     { name_de: "Bronze", name_en: "Bronze", hex: "#CD7F32" },
 
-    // Brauntöne und Erdtöne
     { name_de: "Dunkelbraun", name_en: "Dark Brown", hex: "#3B2A1A" },
     { name_de: "Braun", name_en: "Brown", hex: "#6D4C41" },
     { name_de: "Hellbraun", name_en: "Light Brown", hex: "#A67C52" },
@@ -143,7 +138,6 @@ RGB und HEX sind der exakte Pixelwert.
     { name_de: "Schokobraun", name_en: "Chocolate Brown", hex: "#4E2A1E" },
     { name_de: "Olivebraun", name_en: "Olive Brown", hex: "#6B5B2A" },
 
-    // Rottöne
     { name_de: "Dunkelrot", name_en: "Dark Red", hex: "#8B0000" },
     { name_de: "Rot", name_en: "Red", hex: "#E53935" },
     { name_de: "Hellrot", name_en: "Light Red", hex: "#FF6B6B" },
@@ -153,7 +147,6 @@ RGB und HEX sind der exakte Pixelwert.
     { name_de: "Kirschrot", name_en: "Cherry Red", hex: "#D2042D" },
     { name_de: "Korallenrot", name_en: "Coral Red", hex: "#FF6F61" },
 
-    // Orange und Gelb
     { name_de: "Dunkelorange", name_en: "Dark Orange", hex: "#D35400" },
     { name_de: "Orange", name_en: "Orange", hex: "#FB8C00" },
     { name_de: "Hellorange", name_en: "Light Orange", hex: "#FFB366" },
@@ -165,7 +158,6 @@ RGB und HEX sind der exakte Pixelwert.
     { name_de: "Hellgelb", name_en: "Light Yellow", hex: "#FFF59D" },
     { name_de: "Senfgelb", name_en: "Mustard", hex: "#CDA434" },
 
-    // Grüntöne
     { name_de: "Dunkelgrün", name_en: "Dark Green", hex: "#0B3D2E" },
     { name_de: "Waldgrün", name_en: "Forest Green", hex: "#228B22" },
     { name_de: "Moosgrün", name_en: "Moss Green", hex: "#6A7B3C" },
@@ -177,10 +169,8 @@ RGB und HEX sind der exakte Pixelwert.
     { name_de: "Apfelgrün", name_en: "Apple Green", hex: "#7CFC00" },
     { name_de: "Lindgrün", name_en: "Lime Green", hex: "#32CD32" },
     { name_de: "Mintgrün", name_en: "Mint Green", hex: "#98FF98" },
-
     { name_de: "Graugrün", name_en: "Gray Green", hex: "#7E8F7A" },
 
-    // Blau und Türkis
     { name_de: "Dunkelblau", name_en: "Dark Blue", hex: "#0B2D5B" },
     { name_de: "Navyblau", name_en: "Navy Blue", hex: "#001F3F" },
     { name_de: "Blau", name_en: "Blue", hex: "#1E88E5" },
@@ -191,10 +181,8 @@ RGB und HEX sind der exakte Pixelwert.
     { name_de: "Cyan", name_en: "Cyan", hex: "#00BCD4" },
     { name_de: "Petrol", name_en: "Petrol", hex: "#006D77" },
     { name_de: "Aqua", name_en: "Aqua", hex: "#7FDBFF" },
-
     { name_de: "Graublau", name_en: "Blue Gray", hex: "#6B7C93" },
 
-    // Violett Rosa Magenta
     { name_de: "Dunkelviolett", name_en: "Dark Violet", hex: "#3B1B5A" },
     { name_de: "Violett", name_en: "Violet", hex: "#7E57C2" },
     { name_de: "Lila", name_en: "Purple", hex: "#8E24AA" },
@@ -208,7 +196,6 @@ RGB und HEX sind der exakte Pixelwert.
     { name_de: "Hellrosa", name_en: "Light Pink", hex: "#FFC1DA" },
     { name_de: "Altrosa", name_en: "Rose", hex: "#C9879A" },
 
-    // Sonderfarben Alltag
     { name_de: "Olive", name_en: "Olive", hex: "#808000" },
     { name_de: "Olivgrün Braun", name_en: "Olive Green Brown", hex: "#5A4D2E" },
     { name_de: "Graubraun", name_en: "Gray Brown", hex: "#6E6259" }
@@ -222,12 +209,16 @@ RGB und HEX sind der exakte Pixelwert.
 
   function setLang(lang) {
     currentLang = lang === "en" ? "en" : "de";
-
     const map = I18N[currentLang];
+
     for (const id of textIds) {
       const el = document.getElementById(id);
       if (el && map[id] != null) el.textContent = map[id];
     }
+
+    if (els.brandTitle) els.brandTitle.textContent = map.brand_title;
+    if (els.brandSub) els.brandSub.textContent = map.brand_sub;
+    if (els.footerPrivacy) els.footerPrivacy.textContent = map.footer_privacy;
 
     const isDe = currentLang === "de";
     els.langDe.classList.toggle("is-active", isDe);
@@ -256,10 +247,11 @@ RGB und HEX sind der exakte Pixelwert.
   function hexToRgb(hex) {
     const h = String(hex || "").trim().replace("#", "");
     if (h.length !== 6) return { r: 0, g: 0, b: 0 };
-    const r = parseInt(h.slice(0, 2), 16);
-    const g = parseInt(h.slice(2, 4), 16);
-    const b = parseInt(h.slice(4, 6), 16);
-    return { r, g, b };
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16)
+    };
   }
 
   function rgbToHex(r, g, b) {
@@ -285,7 +277,6 @@ RGB und HEX sind der exakte Pixelwert.
     const rr = r / 255;
     const gg = g / 255;
     const bb = b / 255;
-
     const max = Math.max(rr, gg, bb);
     const min = Math.min(rr, gg, bb);
     const d = max - min;
@@ -310,7 +301,6 @@ RGB und HEX sind der exakte Pixelwert.
       h = Math.round(h * 60);
       if (h < 0) h += 360;
     }
-
     return { h, s, l };
   }
 
@@ -332,7 +322,6 @@ RGB und HEX sind der exakte Pixelwert.
 
     for (const c of FIXED_COLORS) {
       if (excludeNeutrals && isNeutralColor(c)) continue;
-
       const ref = hexToRgb(c.hex);
       const d = distanceRgb(rgb, ref);
       if (d < bestD) {
@@ -367,7 +356,6 @@ RGB und HEX sind der exakte Pixelwert.
   function resizeCanvasForDisplay() {
     const rect = els.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-
     const w = Math.max(1, Math.floor(rect.width * dpr));
     const h = Math.max(1, Math.floor(rect.height * dpr));
 
@@ -381,13 +369,12 @@ RGB und HEX sind der exakte Pixelwert.
   function drawImageToCanvas(bitmap) {
     const cw = els.canvas.width;
     const ch = els.canvas.height;
-
     ctx.clearRect(0, 0, cw, ch);
 
     const iw = bitmap.width;
     const ih = bitmap.height;
-
     const scale = Math.min(cw / iw, ch / ih);
+
     const w = Math.floor(iw * scale);
     const h = Math.floor(ih * scale);
     const x = Math.floor((cw - w) / 2);
@@ -402,7 +389,6 @@ RGB und HEX sind der exakte Pixelwert.
 
   async function loadFile(file) {
     if (!file) return;
-
     try {
       const bitmap = await createImageBitmap(file);
       imageBitmap = bitmap;
@@ -421,9 +407,10 @@ RGB und HEX sind der exakte Pixelwert.
   function getCanvasClickPos(evt) {
     const rect = els.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    const x = (evt.clientX - rect.left) * dpr;
-    const y = (evt.clientY - rect.top) * dpr;
-    return { x, y };
+    return {
+      x: (evt.clientX - rect.left) * dpr,
+      y: (evt.clientY - rect.top) * dpr
+    };
   }
 
   function isInsideImageArea(px, py) {
@@ -452,7 +439,6 @@ RGB und HEX sind der exakte Pixelwert.
     els.hexText.textContent = hex;
     els.swatch.style.background = hex;
 
-    // Regel gegen "alles wird schwarz" bei sehr dunklen aber farbigen Pixeln
     const hsl = rgbToHsl(r, g, b);
     const excludeNeutrals = hsl.l < 0.22 && hsl.s > 0.20;
 
@@ -494,7 +480,6 @@ RGB und HEX sind der exakte Pixelwert.
       loadFile(file);
     });
 
-    // Dropzone nur Drag Drop
     els.dropzone.addEventListener("dragover", e => {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
@@ -524,9 +509,7 @@ RGB und HEX sind der exakte Pixelwert.
   }
 
   function initCanvasSizing() {
-    setTimeout(() => {
-      resizeCanvasForDisplay();
-    }, 0);
+    setTimeout(() => resizeCanvasForDisplay(), 0);
   }
 
   function init() {
