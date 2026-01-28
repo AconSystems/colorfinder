@@ -9,6 +9,7 @@ Vollversion mit CSV Palette + Familien Gate + DE/EN
 Enthält
 - DE/EN Umschaltung UI
 - Drag & Drop + Choose + Reset
+- Zoom (Buttons + Anzeige) + korrektes Klick Mapping
 - Canvas Resize stabil
 - Klick ins Bild -> RGB/HEX -> Farbnamen
 - Service Worker Registrierung
@@ -18,6 +19,10 @@ Enthält
 - Filter raus: kupfer aluminium olive oliv (auch zusammengesetzte Namen)
 - Ergebnis Hinweis ausblenden
 - How it works ausblenden
+
+NEU (Variante A)
+- EN Name wird beim Start 1x pro Palette Eintrag berechnet und gespeichert (kein Live-Uebersetzen beim Klick)
+- Kleine Override Tabelle fuer Spezialfaelle (optional erweiterbar)
 */
 
 (function () {
@@ -121,7 +126,6 @@ Enthält
       els.zoomValue.textContent = `${Math.round(z * 100)}%`;
     }
 
-    // Canvas intern nicht aufblasen -> resize basiert auf unskaliertem Layout
     resizeCanvasForDisplay();
   }
 
@@ -225,7 +229,6 @@ Enthält
     const rect = els.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
 
-    // rect ist durch CSS-Transform (Zoom) skaliert -> zurückrechnen
     const z = zoom || 1;
     const baseCssW = rect.width / z;
     const baseCssH = rect.height / z;
@@ -294,9 +297,12 @@ Enthält
     return dr * dr + dg * dg + db * db;
   }
 
-  // Kontrollierte EN Übersetzung (Variante A)
-  // 1) harte Ausnahmen
-  // 2) definierte Wortbausteine (keine freie Fantasie)
+  // Kontrollierte EN Uebersetzung (Variante A) + Overrides
+  const EN_OVERRIDE = {
+    // hier kannst du spaeter einzelne Namen hart ueberschreiben, falls du es anders willst
+    // "Braungrün": "Brown Green",
+  };
+
   const EN_EXACT = {
     "Elfenbein": "Ivory",
     "Hellelfenbein": "Light Ivory",
@@ -340,6 +346,27 @@ Enthält
     ["braun", "Brown"]
   ];
 
+  const EN_BASE_WORDS = [
+    ["Weiß", "White"],
+    ["Weiss", "White"],
+    ["Schwarz", "Black"],
+    ["Grau", "Grey"],
+    ["Blau", "Blue"],
+    ["Grün", "Green"],
+    ["Gruen", "Green"],
+    ["Rot", "Red"],
+    ["Gelb", "Yellow"],
+    ["Orange", "Orange"],
+    ["Violett", "Violet"],
+    ["Purpur", "Purple"],
+    ["Magenta", "Magenta"],
+    ["Braun", "Brown"],
+    ["Beige", "Beige"],
+    ["Türkis", "Turquoise"],
+    ["Tuerkis", "Turquoise"],
+    ["Cyan", "Cyan"]
+  ];
+
   function capitalizeWords(s) {
     return s
       .split(" ")
@@ -351,11 +378,11 @@ Enthält
   function toEnName(deName) {
     if (!deName) return deName;
 
+    if (EN_OVERRIDE[deName]) return EN_OVERRIDE[deName];
     if (EN_EXACT[deName]) return EN_EXACT[deName];
 
     let s = deName;
 
-    // erst bekannte Präfixe auseinanderziehen
     for (const [de, en] of EN_PARTS) {
       if (s.startsWith(de)) {
         s = s.replace(de, en);
@@ -363,12 +390,8 @@ Enthält
       }
     }
 
-    // typische Komposita in Wortgrenzen bringen
-    // Beispiel: "Beigebraun" -> "Beige braun" (danach Suffix Mapping)
     s = s.replace(/([a-zäöü])([A-ZÄÖÜ])/g, "$1 $2");
 
-    // Suffix Mapping am Wortende oder als letztes Wort
-    // wir arbeiten auf lower-case zur Erkennung, behalten aber danach Capitalize
     const parts = s.split(" ").filter(Boolean);
 
     for (let i = 0; i < parts.length; i++) {
@@ -378,13 +401,11 @@ Enthält
       let replaced = p;
       for (const [deSuf, enSuf] of EN_SUFFIX) {
         if (lower.endsWith(deSuf)) {
-          // Spezial: wenn Wort genau "Beige" ist, lassen wir es
           if (lower === "beige") {
             replaced = "Beige";
             break;
           }
           const stem = p.slice(0, p.length - deSuf.length);
-          // Falls Stem leer: direkt das englische Wort
           replaced = (stem ? stem : "") + enSuf;
           break;
         }
@@ -394,7 +415,6 @@ Enthält
 
     let out = parts.join(" ");
 
-    // ein paar weitere kontrollierte Begriffe
     out = out.replace(/\bLachs\b/gi, "Salmon");
     out = out.replace(/\bTomaten\b/gi, "Tomato");
     out = out.replace(/\bWein\b/gi, "Wine");
@@ -407,6 +427,11 @@ Enthält
     out = out.replace(/\bBeton\b/gi, "Concrete");
     out = out.replace(/\bFenster\b/gi, "Window");
     out = out.replace(/\bStein\b/gi, "Stone");
+
+    for (const [deW, enW] of EN_BASE_WORDS) {
+      const re = new RegExp(`\\b${deW}\\b`, "gi");
+      out = out.replace(re, enW);
+    }
 
     return capitalizeWords(out.trim());
   }
@@ -617,23 +642,15 @@ Perlweiß,#9C9C9C,156 156 156
 Perldunkelgrau,#828282,130 130 130
 `.trim();
 
-  // Filter Tokens: alles mit diesen Substrings fliegt raus
   const bannedTokens = ["kupfer", "aluminium", "olive", "oliv"];
 
   function measuredFamily(h, s, l) {
-    // Sonderfälle zuerst
-    // Silber sehr streng
     if (s <= 0.10 && l >= 0.62 && h >= 180 && h <= 260) return "silver";
-    // Gold streng
     if (h >= 40 && h <= 62 && s >= 0.30 && l >= 0.30 && l <= 0.72) return "gold";
-    // Beige Gruppe priorisiert
     if (h >= 28 && h <= 70 && s < 0.28 && l >= 0.33 && l <= 0.85) return "beige";
-    // Neutral
     if (l <= 0.06) return "neutral";
     if (s <= 0.10) return "neutral";
-    // Braun Kandidat
     if (h >= 10 && h <= 70 && s < 0.30 && l < 0.55 && l > 0.10) return "brown";
-    // Grundfarben
     if (h >= 345 || h <= 15) return "red";
     if (h >= 16 && h <= 40) return "orange";
     if (h >= 41 && h <= 70) return "yellow";
@@ -648,24 +665,19 @@ Perldunkelgrau,#828282,130 130 130
   function entryFamily(name, h, s, l) {
     const lower = (name || "").toLowerCase();
 
-    // Namens-basierte Sonderfamilien
     if (lower.indexOf("silber") !== -1) return "silver";
     if (lower.indexOf("gold") !== -1) return "gold";
 
-    // Weiß Töne als beige bzw neutral
     if (lower.indexOf("elfenbein") !== -1) return "beige";
     if (lower.indexOf("beige") !== -1) return "beige";
     if (lower.indexOf("creme") !== -1) return "beige";
     if (lower.indexOf("papyrus") !== -1) return "beige";
 
-    // Neutral über S
     if (l <= 0.06) return "neutral";
     if (s <= 0.10) return "neutral";
 
-    // Braun Kandidat
     if (h >= 10 && h <= 70 && s < 0.30 && l < 0.55 && l > 0.10) return "brown";
 
-    // Hue Familien
     if (h >= 345 || h <= 15) return "red";
     if (h >= 16 && h <= 40) return "orange";
     if (h >= 41 && h <= 70) return "yellow";
@@ -694,7 +706,6 @@ Perldunkelgrau,#828282,130 130 130
 
       const nLower = name.toLowerCase();
 
-      // Filter raus
       let banned = false;
       for (const t of bannedTokens) {
         if (nLower.indexOf(t) !== -1) {
@@ -702,7 +713,6 @@ Perldunkelgrau,#828282,130 130 130
           break;
         }
       }
-      // Gold Silber bleiben erlaubt
       if (banned && nLower.indexOf("gold") === -1 && nLower.indexOf("silber") === -1) {
         continue;
       }
@@ -719,7 +729,10 @@ Perldunkelgrau,#828282,130 130 130
       const hsl = rgbToHsl(r, g, b);
       const fam = entryFamily(name, hsl.h, hsl.s, hsl.l);
 
-      out.push({ name, hex, r, g, b, fam });
+      // EN wird hier 1x berechnet und gespeichert (kein Live-Uebersetzen beim Klick)
+      const en = toEnName(name);
+
+      out.push({ name, en, hex, r, g, b, fam });
     }
 
     return out;
@@ -727,7 +740,6 @@ Perldunkelgrau,#828282,130 130 130
 
   const palette = parsePalette(CSV_PALETTE);
 
-  // Kandidaten pro Familie vorbereiten
   const byFam = {};
   for (const p of palette) {
     if (!byFam[p.fam]) byFam[p.fam] = [];
@@ -753,7 +765,6 @@ Perldunkelgrau,#828282,130 130 130
 
     const candidates = byFam[fam] || [];
 
-    // Fallback Reihenfolge, falls eine Familie mal leer ist
     const fallbackOrder = {
       beige: ["beige", "yellow", "neutral", "brown"],
       gold: ["gold", "yellow", "beige"],
@@ -785,7 +796,7 @@ Perldunkelgrau,#828282,130 130 130
     const best = bestFromList(r, g, b, list);
 
     const deName = best ? best.name : "Grau";
-    const enName = toEnName(deName);
+    const enName = best ? best.en : toEnName(deName);
 
     return { de: deName, en: enName, fam: fam };
   }
@@ -890,7 +901,6 @@ Perldunkelgrau,#828282,130 130 130
     els.canvas.addEventListener("click", (e) => {
       const rect = els.canvas.getBoundingClientRect();
 
-      // robust gegen DPR und CSS-Zoom: normieren auf Rect -> Canvas
       const nx = (e.clientX - rect.left) / rect.width;
       const ny = (e.clientY - rect.top) / rect.height;
 
