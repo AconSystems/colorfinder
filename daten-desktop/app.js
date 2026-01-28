@@ -33,6 +33,11 @@ Enthält
     btnChoose: document.getElementById("btnChoose"),
     btnClear: document.getElementById("btnClear"),
 
+    btnZoomOut: document.getElementById("btnZoomOut"),
+    btnZoomIn: document.getElementById("btnZoomIn"),
+    btnZoomReset: document.getElementById("btnZoomReset"),
+    zoomValue: document.getElementById("zoomValue"),
+
     canvas: document.getElementById("canvas"),
     swatch: document.getElementById("swatch"),
     colorName: document.getElementById("colorName"),
@@ -97,6 +102,28 @@ Enthält
   let drawInfo = { x: 0, y: 0, w: 0, h: 0 };
   let lastNameDe = null;
   let lastNameEn = null;
+
+  // Zoom State
+  let zoom = 1.0;
+  const ZOOM_MIN = 1.0;
+  const ZOOM_MAX = 6.0;
+  const ZOOM_STEP = 0.25;
+
+  function applyZoom() {
+    const z = zoom || 1;
+    els.canvas.style.transformOrigin = "0 0";
+    els.canvas.style.transform = `scale(${z})`;
+
+    const wrap = els.canvas.closest(".canvas-wrap");
+    if (wrap) wrap.style.overflow = "auto";
+
+    if (els.zoomValue) {
+      els.zoomValue.textContent = `${Math.round(z * 100)}%`;
+    }
+
+    // Canvas intern nicht aufblasen -> resize basiert auf unskaliertem Layout
+    resizeCanvasForDisplay();
+  }
 
   function hideWorkAreaTexts() {
     if (els.resultNote) els.resultNote.style.display = "none";
@@ -198,8 +225,13 @@ Enthält
     const rect = els.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
 
-    const w = Math.max(1, Math.floor(rect.width * dpr));
-    const h = Math.max(1, Math.floor(rect.height * dpr));
+    // rect ist durch CSS-Transform (Zoom) skaliert -> zurückrechnen
+    const z = zoom || 1;
+    const baseCssW = rect.width / z;
+    const baseCssH = rect.height / z;
+
+    const w = Math.max(1, Math.floor(baseCssW * dpr));
+    const h = Math.max(1, Math.floor(baseCssH * dpr));
 
     if (els.canvas.width !== w || els.canvas.height !== h) {
       els.canvas.width = w;
@@ -831,11 +863,40 @@ Perldunkelgrau,#828282,130 130 130
       });
     }
 
+    if (els.btnZoomOut) {
+      els.btnZoomOut.addEventListener("click", (e) => {
+        e.stopPropagation();
+        zoom = clamp(Math.round((zoom - ZOOM_STEP) * 100) / 100, ZOOM_MIN, ZOOM_MAX);
+        applyZoom();
+      });
+    }
+
+    if (els.btnZoomIn) {
+      els.btnZoomIn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        zoom = clamp(Math.round((zoom + ZOOM_STEP) * 100) / 100, ZOOM_MIN, ZOOM_MAX);
+        applyZoom();
+      });
+    }
+
+    if (els.btnZoomReset) {
+      els.btnZoomReset.addEventListener("click", (e) => {
+        e.stopPropagation();
+        zoom = 1.0;
+        applyZoom();
+      });
+    }
+
     els.canvas.addEventListener("click", (e) => {
       const rect = els.canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      const px = (e.clientX - rect.left) * dpr;
-      const py = (e.clientY - rect.top) * dpr;
+
+      // robust gegen DPR und CSS-Zoom: normieren auf Rect -> Canvas
+      const nx = (e.clientX - rect.left) / rect.width;
+      const ny = (e.clientY - rect.top) / rect.height;
+
+      const px = nx * els.canvas.width;
+      const py = ny * els.canvas.height;
+
       pickColorAt(px, py);
     });
 
@@ -855,6 +916,7 @@ Perldunkelgrau,#828282,130 130 130
     initEvents();
     initCanvasSizing();
     registerServiceWorker();
+    applyZoom();
   }
 
   init();
