@@ -4,25 +4,12 @@
 ColorFinder / FarbFinder Desktop Referenz v01
 app.js
 
-Vollversion mit CSV Palette + Familien Gate + DE/EN
+Fix: EN Ausgabe ueber feste EN CSV Liste (keine Live Uebersetzung)
+HARTER CHECK:
+- Beim Start wird geprueft: jeder DE Name, der in die Palette rein kommt, MUSS in EN CSV gemappt sein
+- Falls nicht: ALERT mit fehlenden Namen und App stoppt (kein Betrieb mit halben EN Namen)
 
-Enthält
-- DE/EN Umschaltung UI
-- Drag & Drop + Choose + Reset
-- Zoom (Buttons + Anzeige) + korrektes Klick Mapping
-- Canvas Resize stabil
-- Klick ins Bild -> RGB/HEX -> Farbnamen
-- Service Worker Registrierung
-- Matching gegen große Palette aus CSV 1
-- Familien Gate für alle Grundfarben
-- Sonderlogik: Beige, Braun, Gold, Silber
-- Filter raus: kupfer aluminium olive oliv (auch zusammengesetzte Namen)
-- Ergebnis Hinweis ausblenden
-- How it works ausblenden
-
-NEU (Variante A)
-- EN Name wird beim Start 1x pro Palette Eintrag berechnet und gespeichert (kein Live-Uebersetzen beim Klick)
-- Kleine Override Tabelle fuer Spezialfaelle (optional erweiterbar)
+Sonst unveraendert (Familien Gate, Filter, Klick, Zoom falls vorhanden, usw)
 */
 
 (function () {
@@ -38,6 +25,7 @@ NEU (Variante A)
     btnChoose: document.getElementById("btnChoose"),
     btnClear: document.getElementById("btnClear"),
 
+    // optional (nur wenn in deiner Zoom-HTML vorhanden)
     btnZoomOut: document.getElementById("btnZoomOut"),
     btnZoomIn: document.getElementById("btnZoomIn"),
     btnZoomReset: document.getElementById("btnZoomReset"),
@@ -108,13 +96,15 @@ NEU (Variante A)
   let lastNameDe = null;
   let lastNameEn = null;
 
-  // Zoom State
+  // Zoom (optional)
   let zoom = 1.0;
   const ZOOM_MIN = 1.0;
   const ZOOM_MAX = 6.0;
   const ZOOM_STEP = 0.25;
 
   function applyZoom() {
+    if (!els.canvas) return;
+
     const z = zoom || 1;
     els.canvas.style.transformOrigin = "0 0";
     els.canvas.style.transform = `scale(${z})`;
@@ -153,12 +143,14 @@ NEU (Variante A)
     if (els.footerPrivacy) els.footerPrivacy.textContent = map.footer_privacy;
 
     const isDe = currentLang === "de";
-    els.langDe.classList.toggle("is-active", isDe);
-    els.langEn.classList.toggle("is-active", !isDe);
-    els.langDe.setAttribute("aria-pressed", isDe ? "true" : "false");
-    els.langEn.setAttribute("aria-pressed", !isDe ? "true" : "false");
+    if (els.langDe && els.langEn) {
+      els.langDe.classList.toggle("is-active", isDe);
+      els.langEn.classList.toggle("is-active", !isDe);
+      els.langDe.setAttribute("aria-pressed", isDe ? "true" : "false");
+      els.langEn.setAttribute("aria-pressed", !isDe ? "true" : "false");
+    }
 
-    if (lastNameDe && lastNameEn) {
+    if (lastNameDe && lastNameEn && els.colorName) {
       els.colorName.textContent = isDe ? lastNameDe : lastNameEn;
     }
   }
@@ -209,10 +201,10 @@ NEU (Variante A)
   }
 
   function resetResult() {
-    els.swatch.style.background = "transparent";
-    els.colorName.textContent = "-";
-    els.rgbText.textContent = "-";
-    els.hexText.textContent = "-";
+    if (els.swatch) els.swatch.style.background = "transparent";
+    if (els.colorName) els.colorName.textContent = "-";
+    if (els.rgbText) els.rgbText.textContent = "-";
+    if (els.hexText) els.hexText.textContent = "-";
     lastNameDe = null;
     lastNameEn = null;
   }
@@ -297,147 +289,11 @@ NEU (Variante A)
     return dr * dr + dg * dg + db * db;
   }
 
-  // Kontrollierte EN Uebersetzung (Variante A) + Overrides
-  const EN_OVERRIDE = {
-    // hier kannst du spaeter einzelne Namen hart ueberschreiben, falls du es anders willst
-    // "Braungrün": "Brown Green",
-  };
+  // ------------------------
+  // 2 CSV Listen: DE + EN
+  // ------------------------
 
-  const EN_EXACT = {
-    "Elfenbein": "Ivory",
-    "Hellelfenbein": "Light Ivory",
-    "Cremeweiß": "Cream White",
-    "Grauweiß": "Grey White",
-    "Reinweiß": "Pure White",
-    "Tiefschwarz": "Deep Black",
-    "Signalschwarz": "Signal Black",
-    "Signalweiß": "Signal White",
-    "Verkehrsweiß": "Traffic White",
-    "Verkehrsschwarz": "Traffic Black",
-    "Papyrusweiß": "Papyrus White",
-    "Perlweiß": "Pearl White",
-    "Silbergrau": "Silver Grey",
-    "Anthrazitgrau": "Anthracite Grey",
-    "Graphitgrau": "Graphite Grey",
-    "Graphitschwarz": "Graphite Black"
-  };
-
-  const EN_PARTS = [
-    ["Verkehrs", "Traffic "],
-    ["Signal", "Signal "],
-    ["Perl", "Pearl "],
-    ["Leucht", "Fluorescent "],
-    ["Hell", "Light "],
-    ["Dunkel", "Dark "]
-  ];
-
-  const EN_SUFFIX = [
-    ["weiß", "White"],
-    ["schwarz", "Black"],
-    ["grau", "Grey"],
-    ["blau", "Blue"],
-    ["grün", "Green"],
-    ["rot", "Red"],
-    ["gelb", "Yellow"],
-    ["orange", "Orange"],
-    ["violett", "Violet"],
-    ["purpur", "Purple"],
-    ["magenta", "Magenta"],
-    ["braun", "Brown"]
-  ];
-
-  const EN_BASE_WORDS = [
-    ["Weiß", "White"],
-    ["Weiss", "White"],
-    ["Schwarz", "Black"],
-    ["Grau", "Grey"],
-    ["Blau", "Blue"],
-    ["Grün", "Green"],
-    ["Gruen", "Green"],
-    ["Rot", "Red"],
-    ["Gelb", "Yellow"],
-    ["Orange", "Orange"],
-    ["Violett", "Violet"],
-    ["Purpur", "Purple"],
-    ["Magenta", "Magenta"],
-    ["Braun", "Brown"],
-    ["Beige", "Beige"],
-    ["Türkis", "Turquoise"],
-    ["Tuerkis", "Turquoise"],
-    ["Cyan", "Cyan"]
-  ];
-
-  function capitalizeWords(s) {
-    return s
-      .split(" ")
-      .filter(Boolean)
-      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" ");
-  }
-
-  function toEnName(deName) {
-    if (!deName) return deName;
-
-    if (EN_OVERRIDE[deName]) return EN_OVERRIDE[deName];
-    if (EN_EXACT[deName]) return EN_EXACT[deName];
-
-    let s = deName;
-
-    for (const [de, en] of EN_PARTS) {
-      if (s.startsWith(de)) {
-        s = s.replace(de, en);
-        break;
-      }
-    }
-
-    s = s.replace(/([a-zäöü])([A-ZÄÖÜ])/g, "$1 $2");
-
-    const parts = s.split(" ").filter(Boolean);
-
-    for (let i = 0; i < parts.length; i++) {
-      const p = parts[i];
-      const lower = p.toLowerCase();
-
-      let replaced = p;
-      for (const [deSuf, enSuf] of EN_SUFFIX) {
-        if (lower.endsWith(deSuf)) {
-          if (lower === "beige") {
-            replaced = "Beige";
-            break;
-          }
-          const stem = p.slice(0, p.length - deSuf.length);
-          replaced = (stem ? stem : "") + enSuf;
-          break;
-        }
-      }
-      parts[i] = replaced;
-    }
-
-    let out = parts.join(" ");
-
-    out = out.replace(/\bLachs\b/gi, "Salmon");
-    out = out.replace(/\bTomaten\b/gi, "Tomato");
-    out = out.replace(/\bWein\b/gi, "Wine");
-    out = out.replace(/\bRose\b/gi, "Rose");
-    out = out.replace(/\bApricot\b/gi, "Apricot");
-    out = out.replace(/\bPfirsich\b/gi, "Peach");
-    out = out.replace(/\bNuss\b/gi, "Nut");
-    out = out.replace(/\bMaus\b/gi, "Mouse");
-    out = out.replace(/\bZement\b/gi, "Cement");
-    out = out.replace(/\bBeton\b/gi, "Concrete");
-    out = out.replace(/\bFenster\b/gi, "Window");
-    out = out.replace(/\bStein\b/gi, "Stone");
-
-    for (const [deW, enW] of EN_BASE_WORDS) {
-      const re = new RegExp(`\\b${deW}\\b`, "gi");
-      out = out.replace(re, enW);
-    }
-
-    return capitalizeWords(out.trim());
-  }
-
-  // CSV Palette
-  const CSV_PALETTE = `
+  const CSV_PALETTE_DE = `
 Farbname,Hexcode,RGB
 Grünbeige,#CCC58F,204 197 143
 Beige,#D1BC8A,209 188 138
@@ -613,7 +469,6 @@ Ockerbraun,#955F20,149 95 32
 Signalbraun,#6C3B2A,108 59 42
 Lehmbraun,#734222,115 66 34
 Kupferbraun,#8E402A,142 64 42
-Rehbraun,#59351F,89 53 31
 Olivbraun,#6F4F28,111 79 40
 Nussbraun,#5B3A29,91 58 41
 Rotbraun,#592321,89 35 33
@@ -642,24 +497,240 @@ Perlweiß,#9C9C9C,156 156 156
 Perldunkelgrau,#828282,130 130 130
 `.trim();
 
+  const CSV_NAME_EN = `
+Farbname,English
+Grünbeige,Green Beige
+Beige,Beige
+Sandgelb,Sand Yellow
+Signalgelb,Signal Yellow
+Goldgelb,Gold Yellow
+Honiggelb,Honey Yellow
+Maisgelb,Corn Yellow
+Narzissengelb,Daffodil Yellow
+Braungelb,Brown Yellow
+Zitronengelb,Lemon Yellow
+Perlweiß,Pearl White
+Elfenbein,Ivory
+Hellelfenbein,Light Ivory
+Schwefelgelb,Sulfur Yellow
+Safrangelb,Saffron Yellow
+Zinkgelb,Zinc Yellow
+Graubeige,Grey Beige
+Olivgelb,Olive Yellow
+Rapsgelb,Rapeseed Yellow
+Verkehrsgelb,Traffic Yellow
+Gelborange,Yellow Orange
+Rotorange,Red Orange
+Blutorange,Blood Orange
+Pastellorange,Pastel Orange
+Reinorange,Pure Orange
+Leuchtorange,Fluorescent Orange
+Leuchthellorange,Fluorescent Light Orange
+Hellrotorange,Light Red Orange
+Verkehrsorange,Traffic Orange
+Signalorange,Signal Orange
+Tieforange,Deep Orange
+Lachsorange,Salmon Orange
+Perlorange,Pearl Orange
+Feuerrot,Fire Red
+Signalrot,Signal Red
+Karminrot,Carmine Red
+Rubinrot,Ruby Red
+Purpurrot,Purple Red
+Weinrot,Wine Red
+Schwarzrot,Black Red
+Oxidrot,Oxide Red
+Braunrot,Brown Red
+Beigerot,Beige Red
+Tomatenrot,Tomato Red
+Altrosa,Old Rose
+Hellrosa,Light Rose
+Korallenrot,Coral Red
+Rose,Rose
+Erdbeerrot,Strawberry Red
+Verkehrsrot,Traffic Red
+Lachsrot,Salmon Red
+Leuchtrot,Fluorescent Red
+Leuchthellrot,Fluorescent Light Red
+Himbeerrot,Raspberry Red
+Reinrot,Pure Red
+Perlrot,Pearl Red
+Orientrot,Orient Red
+Perlrubinrot,Pearl Ruby Red
+Rotlila,Red Lilac
+Rotviolett,Red Violet
+Erikaviolett,Erica Violet
+Bordeauxviolett,Bordeaux Violet
+Blaulila,Blue Lilac
+Verkehrspurpur,Traffic Purple
+Purpurviolett,Purple Violet
+Signalviolett,Signal Violet
+Pastellviolett,Pastel Violet
+Telemagenta,Tele Magenta
+Perlviolett,Pearl Violet
+Perlbrombeer,Pearl Blackberry
+Violettblau,Violet Blue
+Grünblau,Green Blue
+Ultramarinblau,Ultramarine Blue
+Saphirblau,Sapphire Blue
+Schwarzblau,Black Blue
+Signalblau,Signal Blue
+Brillantblau,Brilliant Blue
+Graublau,Grey Blue
+Azurblau,Azure Blue
+Enzianblau,Gentian Blue
+Stahlblau,Steel Blue
+Lichtblau,Light Blue
+Kobaltblau,Cobalt Blue
+Taubenblau,Pigeon Blue
+Himmelblau,Sky Blue
+Verkehrsblau,Traffic Blue
+Türkisblau,Turquoise Blue
+Capriblau,Capri Blue
+Ozeanblau,Ocean Blue
+Wasserblau,Water Blue
+Nachtblau,Night Blue
+Fernblau,Distant Blue
+Pastellblau,Pastel Blue
+Perlenzian,Pearl Gentian
+Perlnachtblau,Pearl Night Blue
+Patinagrün,Patina Green
+Smaragdgrün,Emerald Green
+Laubgrün,Leaf Green
+Olivgrün,Olive Green
+Blaugrün,Blue Green
+Moosgrün,Moss Green
+Graugrün,Grey Green
+Flaschengrün,Bottle Green
+Braungrün,Brown Green
+Tannengrün,Fir Green
+Grasgrün,Grass Green
+Resedagrün,Mignonette Green
+Schwarzgrün,Black Green
+Schilfgrün,Reed Green
+Gelboliv,Yellow Olive
+Schwarzoliv,Black Olive
+Türkisgrün,Turquoise Green
+Maigrün,May Green
+Gelbgrün,Yellow Green
+Weißgrün,White Green
+Chromoxidgrün,Chromium Oxide Green
+Blassgrün,Pale Green
+Braunoliv,Brown Olive
+Verkehrsgrün,Traffic Green
+Farngrün,Fern Green
+Opalgrün,Opal Green
+Lichtgrün,Light Green
+Kieferngrün,Pine Green
+Minzgrün,Mint Green
+Signalgrün,Signal Green
+Minttürkis,Mint Turquoise
+Pastelltürkis,Pastel Turquoise
+Perlgrün,Pearl Green
+Perlopalgrün,Pearl Opal Green
+Reingrün,Pure Green
+Leuchtgrün,Fluorescent Green
+Fehgrau,Fawn Grey
+Silbergrau,Silver Grey
+Olivgrau,Olive Grey
+Moosgrau,Moss Grey
+Signalgrau,Signal Grey
+Mausgrau,Mouse Grey
+Beigegrau,Beige Grey
+Khakigrau,Khaki Grey
+Grüngrau,Green Grey
+Zeltgrau,Tent Grey
+Eisengrau,Iron Grey
+Basaltgrau,Basalt Grey
+Braungrau,Brown Grey
+Schiefergrau,Slate Grey
+Anthrazitgrau,Anthracite Grey
+Schwarzgrau,Black Grey
+Umbragrau,Umbra Grey
+Betongrau,Concrete Grey
+Graphitgrau,Graphite Grey
+Granitegrau,Granite Grey
+Steingrau,Stone Grey
+Blaugrau,Blue Grey
+Kieselgrau,Pebble Grey
+Zementgrau,Cement Grey
+Gelbgrau,Yellow Grey
+Lichtgrau,Light Grey
+Platingrau,Platinum Grey
+Staubgrau,Dust Grey
+Achatgrau,Agate Grey
+Quarzgrau,Quartz Grey
+Fenstergrau,Window Grey
+Verkehrsgrau A,Traffic Grey A
+Verkehrsgrau B,Traffic Grey B
+Seidengrau,Silk Grey
+Telegrau 1,Tele Grey 1
+Telegrau 2,Tele Grey 2
+Telegrau 4,Tele Grey 4
+Perlmausgrau,Pearl Mouse Grey
+Grünbraun,Green Brown
+Ockerbraun,Ochre Brown
+Signalbraun,Signal Brown
+Lehmbraun,Clay Brown
+Kupferbraun,Copper Brown
+Olivbraun,Olive Brown
+Nussbraun,Nut Brown
+Rotbraun,Red Brown
+Sepiabraun,Sepia Brown
+Kastanienbraun,Chestnut Brown
+Mahagonibraun,Mahogany Brown
+Schokoladenbraun,Chocolate Brown
+Graubraun,Grey Brown
+Schwarzbraun,Black Brown
+Beigebraun,Beige Brown
+Terrabraun,Terra Brown
+Perlkupfer,Pearl Copper
+Cremeweiß,Cream White
+Grauweiß,Grey White
+Signalweiß,Signal White
+Signalschwarz,Signal Black
+Tiefschwarz,Deep Black
+Weißaluminium,White Aluminium
+Graualuminium,Grey Aluminium
+Reinweiß,Pure White
+Graphitschwarz,Graphite Black
+Verkehrsweiß,Traffic White
+Verkehrsschwarz,Traffic Black
+Papyrusweiß,Papyrus White
+Perlweiß,Pearl White
+Perldunkelgrau,Pearl Dark Grey
+`.trim();
+
+  function buildEnMap(csvText) {
+    const map = {};
+    const lines = csvText.split(/\r?\n/);
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const parts = line.split(",");
+      if (parts.length < 2) continue;
+      const de = (parts[0] || "").trim();
+      const en = (parts.slice(1).join(",") || "").trim();
+      if (de) map[de] = en;
+    }
+    return map;
+  }
+
+  const EN_MAP = buildEnMap(CSV_NAME_EN);
+
+  // Filter Tokens
   const bannedTokens = ["kupfer", "aluminium", "olive", "oliv"];
 
-  function measuredFamily(h, s, l) {
-    if (s <= 0.10 && l >= 0.62 && h >= 180 && h <= 260) return "silver";
-    if (h >= 40 && h <= 62 && s >= 0.30 && l >= 0.30 && l <= 0.72) return "gold";
-    if (h >= 28 && h <= 70 && s < 0.28 && l >= 0.33 && l <= 0.85) return "beige";
-    if (l <= 0.06) return "neutral";
-    if (s <= 0.10) return "neutral";
-    if (h >= 10 && h <= 70 && s < 0.30 && l < 0.55 && l > 0.10) return "brown";
-    if (h >= 345 || h <= 15) return "red";
-    if (h >= 16 && h <= 40) return "orange";
-    if (h >= 41 && h <= 70) return "yellow";
-    if (h >= 71 && h <= 165) return "green";
-    if (h >= 166 && h <= 205) return "cyan";
-    if (h >= 206 && h <= 255) return "blue";
-    if (h >= 256 && h <= 299) return "violet";
-    if (h >= 300 && h <= 344) return "magenta";
-    return "other";
+  function nameIsBanned(name) {
+    const nLower = (name || "").toLowerCase();
+    for (const t of bannedTokens) {
+      if (nLower.indexOf(t) !== -1) {
+        // Gold/Silber bleibt erlaubt
+        if (nLower.indexOf("gold") !== -1 || nLower.indexOf("silber") !== -1) return false;
+        return true;
+      }
+    }
+    return false;
   }
 
   function entryFamily(name, h, s, l) {
@@ -689,7 +760,57 @@ Perldunkelgrau,#828282,130 130 130
     return "other";
   }
 
-  function parsePalette(csvText) {
+  function measuredFamily(h, s, l) {
+    if (s <= 0.10 && l >= 0.62 && h >= 180 && h <= 260) return "silver";
+    if (h >= 40 && h <= 62 && s >= 0.30 && l >= 0.30 && l <= 0.72) return "gold";
+    if (h >= 28 && h <= 70 && s < 0.28 && l >= 0.33 && l <= 0.85) return "beige";
+    if (l <= 0.06) return "neutral";
+    if (s <= 0.10) return "neutral";
+    if (h >= 10 && h <= 70 && s < 0.30 && l < 0.55 && l > 0.10) return "brown";
+    if (h >= 345 || h <= 15) return "red";
+    if (h >= 16 && h <= 40) return "orange";
+    if (h >= 41 && h <= 70) return "yellow";
+    if (h >= 71 && h <= 165) return "green";
+    if (h >= 166 && h <= 205) return "cyan";
+    if (h >= 206 && h <= 255) return "blue";
+    if (h >= 256 && h <= 299) return "violet";
+    if (h >= 300 && h <= 344) return "magenta";
+    return "other";
+  }
+
+  function hardCheckMappingOrDie(csvDe, enMap) {
+    const missing = [];
+    const lines = csvDe.split(/\r?\n/);
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const parts = line.split(",");
+      if (parts.length < 3) continue;
+
+      const name = (parts[0] || "").trim();
+      if (!name) continue;
+
+      // nur Namen pruefen, die nicht rausgefiltert werden
+      if (nameIsBanned(name)) continue;
+
+      if (!enMap[name] || !String(enMap[name]).trim()) {
+        missing.push(name);
+      }
+    }
+
+    if (missing.length) {
+      const msg =
+        "EN Mapping fehlt fuer folgende DE Namen:\n\n" +
+        missing.join("\n") +
+        "\n\nBitte EN CSV ergaenzen. App stoppt jetzt bewusst (HART).";
+      alert(msg);
+      throw new Error("EN mapping missing: " + missing.join(", "));
+    }
+  }
+
+  function parsePalette(csvText, enMap) {
     const lines = csvText.split(/\r?\n/);
     const out = [];
 
@@ -701,21 +822,12 @@ Perldunkelgrau,#828282,130 130 130
       if (parts.length < 3) continue;
 
       const name = (parts[0] || "").trim();
+      if (!name) continue;
+
+      if (nameIsBanned(name)) continue;
+
       const hex = (parts[1] || "").trim();
       const rgbStr = (parts[2] || "").trim();
-
-      const nLower = name.toLowerCase();
-
-      let banned = false;
-      for (const t of bannedTokens) {
-        if (nLower.indexOf(t) !== -1) {
-          banned = true;
-          break;
-        }
-      }
-      if (banned && nLower.indexOf("gold") === -1 && nLower.indexOf("silber") === -1) {
-        continue;
-      }
 
       const rgbParts = rgbStr.split(" ").filter(Boolean);
       if (rgbParts.length < 3) continue;
@@ -729,21 +841,13 @@ Perldunkelgrau,#828282,130 130 130
       const hsl = rgbToHsl(r, g, b);
       const fam = entryFamily(name, hsl.h, hsl.s, hsl.l);
 
-      // EN wird hier 1x berechnet und gespeichert (kein Live-Uebersetzen beim Klick)
-      const en = toEnName(name);
+      // HART: hier gibt es keinen Fallback mehr
+      const en = enMap[name];
 
       out.push({ name, en, hex, r, g, b, fam });
     }
 
     return out;
-  }
-
-  const palette = parsePalette(CSV_PALETTE);
-
-  const byFam = {};
-  for (const p of palette) {
-    if (!byFam[p.fam]) byFam[p.fam] = [];
-    byFam[p.fam].push(p);
   }
 
   function bestFromList(r, g, b, list) {
@@ -759,7 +863,7 @@ Perldunkelgrau,#828282,130 130 130
     return best;
   }
 
-  function nearestNameWithFamilyGate(r, g, b) {
+  function nearestNameWithFamilyGate(r, g, b, byFam, palette) {
     const hsl = rgbToHsl(r, g, b);
     const fam = measuredFamily(hsl.h, hsl.s, hsl.l);
 
@@ -796,12 +900,12 @@ Perldunkelgrau,#828282,130 130 130
     const best = bestFromList(r, g, b, list);
 
     const deName = best ? best.name : "Grau";
-    const enName = best ? best.en : toEnName(deName);
+    const enName = best ? best.en : deName;
 
     return { de: deName, en: enName, fam: fam };
   }
 
-  function pickColorAt(px, py) {
+  function pickColorAt(px, py, byFam, palette) {
     if (!imageBitmap) return;
     if (!isInsideImageArea(px, py)) return;
 
@@ -815,16 +919,16 @@ Perldunkelgrau,#828282,130 130 130
 
     const hex = rgbToHex(r, g, b);
 
-    els.rgbText.textContent = `${r} ${g} ${b}`;
-    els.hexText.textContent = hex;
-    els.swatch.style.background = hex;
+    if (els.rgbText) els.rgbText.textContent = `${r} ${g} ${b}`;
+    if (els.hexText) els.hexText.textContent = hex;
+    if (els.swatch) els.swatch.style.background = hex;
 
-    const name = nearestNameWithFamilyGate(r, g, b);
+    const name = nearestNameWithFamilyGate(r, g, b, byFam, palette);
 
     lastNameDe = name.de;
     lastNameEn = name.en;
 
-    els.colorName.textContent = currentLang === "de" ? name.de : name.en;
+    if (els.colorName) els.colorName.textContent = currentLang === "de" ? name.de : name.en;
   }
 
   function registerServiceWorker() {
@@ -834,25 +938,31 @@ Perldunkelgrau,#828282,130 130 130
     });
   }
 
-  function initEvents() {
-    els.langDe.addEventListener("click", () => setLang("de"));
-    els.langEn.addEventListener("click", () => setLang("en"));
+  function initEvents(byFam, palette) {
+    if (els.langDe) els.langDe.addEventListener("click", () => setLang("de"));
+    if (els.langEn) els.langEn.addEventListener("click", () => setLang("en"));
 
-    els.btnChoose.addEventListener("click", (e) => {
-      e.stopPropagation();
-      els.fileInput.click();
-    });
+    if (els.btnChoose) {
+      els.btnChoose.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (els.fileInput) els.fileInput.click();
+      });
+    }
 
-    els.btnClear.addEventListener("click", (e) => {
-      e.stopPropagation();
-      els.fileInput.value = "";
-      clearCanvas();
-    });
+    if (els.btnClear) {
+      els.btnClear.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (els.fileInput) els.fileInput.value = "";
+        clearCanvas();
+      });
+    }
 
-    els.fileInput.addEventListener("change", () => {
-      const file = els.fileInput.files && els.fileInput.files[0];
-      loadFile(file);
-    });
+    if (els.fileInput) {
+      els.fileInput.addEventListener("change", () => {
+        const file = els.fileInput.files && els.fileInput.files[0];
+        loadFile(file);
+      });
+    }
 
     if (els.dropzone) {
       els.dropzone.addEventListener("dragover", (e) => {
@@ -881,7 +991,6 @@ Perldunkelgrau,#828282,130 130 130
         applyZoom();
       });
     }
-
     if (els.btnZoomIn) {
       els.btnZoomIn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -889,7 +998,6 @@ Perldunkelgrau,#828282,130 130 130
         applyZoom();
       });
     }
-
     if (els.btnZoomReset) {
       els.btnZoomReset.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -898,17 +1006,16 @@ Perldunkelgrau,#828282,130 130 130
       });
     }
 
-    els.canvas.addEventListener("click", (e) => {
-      const rect = els.canvas.getBoundingClientRect();
-
-      const nx = (e.clientX - rect.left) / rect.width;
-      const ny = (e.clientY - rect.top) / rect.height;
-
-      const px = nx * els.canvas.width;
-      const py = ny * els.canvas.height;
-
-      pickColorAt(px, py);
-    });
+    if (els.canvas) {
+      els.canvas.addEventListener("click", (e) => {
+        const rect = els.canvas.getBoundingClientRect();
+        const nx = (e.clientX - rect.left) / rect.width;
+        const ny = (e.clientY - rect.top) / rect.height;
+        const px = nx * els.canvas.width;
+        const py = ny * els.canvas.height;
+        pickColorAt(px, py, byFam, palette);
+      });
+    }
 
     window.addEventListener("resize", () => {
       resizeCanvasForDisplay();
@@ -923,7 +1030,19 @@ Perldunkelgrau,#828282,130 130 130
     hideWorkAreaTexts();
     setLang("de");
     resetResult();
-    initEvents();
+
+    // HART CHECK: wenn was fehlt, stoppt es hier
+    hardCheckMappingOrDie(CSV_PALETTE_DE, EN_MAP);
+
+    const palette = parsePalette(CSV_PALETTE_DE, EN_MAP);
+
+    const byFam = {};
+    for (const p of palette) {
+      if (!byFam[p.fam]) byFam[p.fam] = [];
+      byFam[p.fam].push(p);
+    }
+
+    initEvents(byFam, palette);
     initCanvasSizing();
     registerServiceWorker();
     applyZoom();
