@@ -2,7 +2,7 @@
   "name": "ColorFinder Desktop Referenz v01",
   "short_name": "ColorFinder",
   "description": "Browserbasierte Farbnamen Methode Referenz. Desktop Fokus: Fotos und Bilder. Kein Produkt. Keine Updates. Eigenverantwortung.",
-  "start_url": "/colorfinder/daten-desktop/index.html",
+  "start_url": "https://aconsystems.github.io/colorfinder/daten-desktop/index.html",
   "scope": "/colorfinder/daten-desktop/",
   "display": "standalone",
   "orientation": "any",
