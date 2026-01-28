@@ -234,3 +234,23 @@ a {
   justify-content: center;
   text-align: center;
 }
+
+/* --- Zoom Ergänzung (neu, sonst nichts geändert) --- */
+
+.canvas-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.zoom-readout {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #3a3a3a;
+  background: #222222;
+}
